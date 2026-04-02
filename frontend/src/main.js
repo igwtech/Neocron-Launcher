@@ -43,6 +43,40 @@ let gameRunning = false;
 let logVisible = false;
 let gameInstalled = false;
 let loggedIn = false;
+let tipInterval = null;
+
+const TIPS = [
+    "Neocron is one of the world's first Cyberpunk MMORPGs, released in September 2002.",
+    "The planet has been turned into a toxic wasteland — humanity survives in protective domed cities.",
+    "Combat is action-oriented, first-person shooter style — no auto-targeting!",
+    "Choose your faction wisely: 6 Pro City, 4 Anti City, and 1 Neutral faction to pick from.",
+    "City Administration is a recommended Pro City faction for newcomers.",
+    "Switching factions costs 300,000 credits and requires 50+ Faction Sympathy.",
+    "Every time you level up a main skill, you receive 5 Skill Points for subskills.",
+    "There are 5 core abilities: Intelligence, Strength, Constitution, Dexterity, and PSI Power.",
+    "Skill point costs escalate: levels 0-50 cost 1 point, 51-75 cost 2, 76-100 cost 3, and 101+ cost 5.",
+    "Implants are grafted into 13 body slots: brain, bone, eye, heart, hand, and backbone.",
+    "For tech level 30+ implants, carry Implant Disinfection Gel in your inventory.",
+    "Headshots deal 120% damage, torso 100%, and legs 80% plus a speed reduction.",
+    "Always carry medkits, stamina boosters, ammo, and healing nanites when leaving safe zones.",
+    "In team battles, prioritize APUs first, then Spies, then resurrecting players.",
+    "Use area-of-effect weapons when facing Spies who rely on stealth.",
+    "Dungeons are non-instanced — multiple players compete for hunting privileges.",
+    "City dungeons scale by player rank: Very Easy for 1-10 up to Very Hard for 40+.",
+    "Most items can be constructed or cloned in-game through the crafting system.",
+    "Open the Hypercom with F1 to access chat channels — many players use the Help channel.",
+    "The number one factor in successful team fights is coordination — designate a target caller.",
+    "Maintain at least two weapons with different damage types for PvP encounters.",
+    "The Pathfinder Recon Officer at E12 provides detailed dungeon information in-game.",
+    "Wasteland dungeons like Chaos Caves and Regants Legacy require well-coordinated teams.",
+    "Intelligence skill enables tradeskilling and improves weapon usability.",
+    "High-tech implants may degrade during combat and can pop out if you die.",
+    "The game became completely free-to-play in August 2012.",
+    "Your rank displays as Combat Rank / Base Rank — combat from weapons, base from abilities.",
+    "When asking another player to install implants ('poking'), tip 1,000-20,000 credits.",
+    "The Law Enforcer Chip separates PvP and PvE players in certain zones.",
+    "Neocron features a player-driven economy with crafting, trading, and rare item hunting.",
+];
 
 // --- Init ---
 async function init() {
@@ -121,6 +155,30 @@ async function updateRuntimeStatus() {
     }
 }
 
+// --- Tips rotation ---
+function startTips() {
+    const container = document.getElementById('tip-container');
+    const textEl = document.getElementById('tip-text');
+    container.classList.remove('hidden');
+    showRandomTip(textEl, container);
+    tipInterval = setInterval(() => showRandomTip(textEl, container), 8000);
+}
+
+function stopTips() {
+    if (tipInterval) { clearInterval(tipInterval); tipInterval = null; }
+    document.getElementById('tip-container').classList.add('hidden');
+}
+
+function showRandomTip(textEl, container) {
+    container.classList.add('fade-out');
+    container.classList.remove('fade-in');
+    setTimeout(() => {
+        textEl.textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+        container.classList.remove('fade-out');
+        container.classList.add('fade-in');
+    }, 500);
+}
+
 function formatSpeed(bytesPerSec) {
     if (bytesPerSec <= 0) return '';
     if (bytesPerSec > 1024 * 1024) return (bytesPerSec / (1024 * 1024)).toFixed(1) + ' MB/s';
@@ -196,6 +254,7 @@ function setupEvents() {
             : 'Complete!';
         updating = false;
         gameInstalled = true;
+        stopTips();
         updateMainButton();
         loadVersions();
     });
@@ -208,6 +267,7 @@ function setupEvents() {
         }
         fill.style.width = '0%';
         updating = false;
+        stopTips();
         updateMainButton();
     });
 
@@ -277,12 +337,14 @@ function setupButtons() {
         if (updating) {
             await CancelUpdate();
             updating = false;
+            stopTips();
             updateMainButton();
             return;
         }
         updating = true;
         updateMainButton();
         document.getElementById('progress-container').classList.remove('hidden');
+        startTips();
         if (gameInstalled) {
             await StartUpdate();
         } else {
@@ -320,6 +382,7 @@ function setupButtons() {
         updating = true;
         updateMainButton();
         document.getElementById('progress-container').classList.remove('hidden');
+        startTips();
         await StartUpdate();
     });
     document.getElementById('btn-banner-dismiss').addEventListener('click', () => {

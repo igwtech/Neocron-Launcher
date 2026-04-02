@@ -26,8 +26,10 @@ Installed automatically during prefix setup:
 Set automatically on launch:
 
 ```
-WINEDLLOVERRIDES="msvcrt=n;quartz=n"
+WINEDLLOVERRIDES="quartz=n,b"
 ```
+
+> `msvcrt` is intentionally **not** overridden — doing so breaks Proton/modern Wine.
 
 ## Windows Version
 

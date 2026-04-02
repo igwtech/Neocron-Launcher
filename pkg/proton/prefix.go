@@ -347,7 +347,7 @@ func (pm *PrefixManager) buildProtonEnv(protonBuildPath string) []string {
 		fmt.Sprintf("STEAM_COMPAT_DATA_PATH=%s", pm.PrefixPath),
 		fmt.Sprintf("STEAM_COMPAT_CLIENT_INSTALL_PATH=%s", protonBuildPath),
 		"WINEDEBUG=-all,err+module",
-		"WINEDLLOVERRIDES=msvcrt=n;quartz=n",
+		"WINEDLLOVERRIDES=quartz=n,b",
 	)
 
 	return filtered

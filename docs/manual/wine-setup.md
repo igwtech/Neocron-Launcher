@@ -42,11 +42,12 @@ The launcher installs these automatically via `winetricks` during prefix setup.
 The launcher automatically sets these DLL overrides when launching the game:
 
 ```
-WINEDLLOVERRIDES="msvcrt=n;quartz=n"
+WINEDLLOVERRIDES="quartz=n,b"
 ```
 
-- `msvcrt=n` — Use the native (Windows) C runtime instead of Wine's built-in
-- `quartz=n` — Use native DirectShow for video playback
+- `quartz=n,b` — Prefer native DirectShow for video playback, fall back to builtin
+
+> **Note:** The TechHaven wiki suggests overriding `msvcrt` to native, but this is incompatible with Proton and modern Wine — it causes cascade DLL loading failures (`advapi32.dll`, `user32.dll`, etc. all fail). The launcher does **not** override msvcrt. Wine's built-in msvcrt works correctly with Neocron 2.
 
 ## Windows Version
 
@@ -86,7 +87,7 @@ WINEPREFIX=~/.wine winetricks -q corefonts vcrun6 mfc42
 
 # Run the game
 WINEDEBUG=-all,err+module \
-WINEDLLOVERRIDES="msvcrt=n;quartz=n" \
+WINEDLLOVERRIDES="quartz=n,b" \
 WINEPREFIX=~/.wine \
 wine ~/Neocron2/neocronclient.exe
 ```

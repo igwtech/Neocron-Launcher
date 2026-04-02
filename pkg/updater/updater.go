@@ -132,7 +132,7 @@ type hashEntryXML struct {
 // IsInstalled checks if the game appears to be installed.
 func (u *Updater) IsInstalled() bool {
 	// Check for key game files
-	markers := []string{"nc2.exe", "pak__version._", "neocron.ini"}
+	markers := []string{"neocronclient.exe", "client.exe", "pak__version._", "neocron.ini"}
 	for _, m := range markers {
 		path := filepath.Join(u.InstallDir, m)
 		if _, err := os.Stat(path); err == nil {

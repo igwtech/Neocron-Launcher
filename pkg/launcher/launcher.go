@@ -103,7 +103,7 @@ func (l *Launcher) Launch(cfg *config.Config, onOutput func(string), onExit func
 			fmt.Sprintf("NC_SERVER=%s", server.Address),
 			fmt.Sprintf("NC_PORT=%d", server.Port),
 			"WINEDEBUG=-all,err+module",
-			"WINEDLLOVERRIDES=msvcrt=n;quartz=n",
+			"WINEDLLOVERRIDES=quartz=n,b",
 		)
 		if cfg.PrefixPath != "" {
 			env = append(env, fmt.Sprintf("WINEPREFIX=%s", cfg.PrefixPath))
@@ -245,7 +245,7 @@ func RunSysConfig(cfg *config.Config) error {
 		env := os.Environ()
 		env = append(env,
 			"WINEDEBUG=-all,err+module",
-			"WINEDLLOVERRIDES=msvcrt=n;quartz=n",
+			"WINEDLLOVERRIDES=quartz=n,b",
 		)
 		if cfg.PrefixPath != "" {
 			env = append(env, fmt.Sprintf("WINEPREFIX=%s", cfg.PrefixPath))

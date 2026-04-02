@@ -8,41 +8,49 @@ on:
 permissions:
   contents: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     strategy:
       fail-fast: false
       matrix:
         include:
-          # Linux
+          # Linux amd64
           - os: ubuntu-latest
             platform: linux/amd64
             artifact: launcher-linux-amd64
             binary: launcher
-          - os: ubuntu-latest
+            deps: linux
+
+          # Linux arm64 — native arm64 runner, no cross-compilation needed
+          - os: ubuntu-24.04-arm
             platform: linux/arm64
             artifact: launcher-linux-arm64
             binary: launcher
+            deps: linux
 
-          # Windows (cross-compiled from Linux)
+          # Windows amd64 (cross-compiled from Linux)
           - os: ubuntu-latest
             platform: windows/amd64
             artifact: launcher-windows-amd64.exe
             binary: launcher.exe
-          - os: ubuntu-latest
-            platform: windows/arm64
-            artifact: launcher-windows-arm64.exe
-            binary: launcher.exe
+            deps: windows
 
-          # macOS (requires macOS runner)
+          # macOS amd64 (cross-compiled from Apple Silicon runner)
           - os: macos-latest
             platform: darwin/amd64
             artifact: launcher-darwin-amd64
             binary: launcher
+            deps: macos
+
+          # macOS Apple Silicon
           - os: macos-latest
             platform: darwin/arm64
             artifact: launcher-darwin-arm64
             binary: launcher
+            deps: macos
 
     runs-on: ${{ matrix.os }}
     name: Build ${{ matrix.platform }}
@@ -60,7 +68,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -69,56 +77,50 @@ jobs:
 
       # --- Linux dependencies ---
       - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
+        if: matrix.deps == 'linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libgtk-3-dev \
-            libwebkit2gtk-4.0-dev \
+            libwebkit2gtk-4.1-dev \
             pkg-config
 
-      - name: Install Linux ARM64 cross-compiler
-        if: runner.os == 'Linux' && matrix.platform == 'linux/arm64'
-        run: |
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-aarch64-linux-gnu \
-            g++-aarch64-linux-gnu \
-            libgtk-3-dev:arm64 \
-            libwebkit2gtk-4.0-dev:arm64 \
-            pkg-config
-
-      - name: Install Windows cross-compiler (amd64)
-        if: runner.os == 'Linux' && matrix.platform == 'windows/amd64'
+      # --- Windows cross-compilation dependencies ---
+      - name: Install Windows cross-compiler
+        if: matrix.deps == 'windows'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            gcc-mingw-w64-x86-64 \
-            g++-mingw-w64-x86-64
-
-      - name: Install Windows cross-compiler (arm64)
-        if: runner.os == 'Linux' && matrix.platform == 'windows/arm64'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            pkg-config \
             gcc-mingw-w64-x86-64 \
             g++-mingw-w64-x86-64
 
       # --- macOS dependencies ---
       - name: Install macOS dependencies
-        if: runner.os == 'macOS'
+        if: matrix.deps == 'macos'
         run: brew install --quiet pkg-config
 
       # --- Build ---
       - name: Build
-        run: wails build -platform ${{ matrix.platform }} -o ${{ matrix.binary }}
+        run: wails build -platform ${{ matrix.platform }} -o ${{ matrix.binary }} -nopackage -tags webkit2_41
         env:
           CGO_ENABLED: 1
 
-      - name: Rename binary
+      - name: Find and copy binary
         run: |
-          cp build/bin/${{ matrix.binary }} ${{ matrix.artifact }}
+          echo "Looking for binary..."
+          find build/bin -type f | head -20
+          if [ -f "build/bin/${{ matrix.binary }}" ]; then
+            cp "build/bin/${{ matrix.binary }}" "${{ matrix.artifact }}"
+          elif [ -d "build/bin/${{ matrix.binary }}.app" ]; then
+            cp "build/bin/${{ matrix.binary }}.app/Contents/MacOS/${{ matrix.binary }}" "${{ matrix.artifact }}"
+          else
+            echo "ERROR: Binary not found"
+            find build/ -type f -name "${{ matrix.binary }}*"
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -149,6 +151,5 @@ jobs:
             artifacts/launcher-linux-amd64/launcher-linux-amd64
             artifacts/launcher-linux-arm64/launcher-linux-arm64
             artifacts/launcher-windows-amd64.exe/launcher-windows-amd64.exe
-            artifacts/launcher-windows-arm64.exe/launcher-windows-arm64.exe
             artifacts/launcher-darwin-amd64/launcher-darwin-amd64
             artifacts/launcher-darwin-arm64/launcher-darwin-arm64

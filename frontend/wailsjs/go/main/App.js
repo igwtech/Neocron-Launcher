@@ -30,12 +30,24 @@ export function CancelUpdate() {
   return window['go']['main']['App']['CancelUpdate']();
 }
 
+export function CheckAddonUpdates() {
+  return window['go']['main']['App']['CheckAddonUpdates']();
+}
+
 export function CheckForUpdate() {
   return window['go']['main']['App']['CheckForUpdate']();
 }
 
+export function DisableAddon(arg1) {
+  return window['go']['main']['App']['DisableAddon'](arg1);
+}
+
 export function DownloadProton(arg1) {
   return window['go']['main']['App']['DownloadProton'](arg1);
+}
+
+export function EnableAddon(arg1) {
+  return window['go']['main']['App']['EnableAddon'](arg1);
 }
 
 export function GetApplications() {
@@ -56,6 +68,10 @@ export function GetGameEndpoints(arg1) {
 
 export function GetGameStatus() {
   return window['go']['main']['App']['GetGameStatus']();
+}
+
+export function GetInstalledAddons() {
+  return window['go']['main']['App']['GetInstalledAddons']();
 }
 
 export function GetLocalVersion() {
@@ -84,6 +100,10 @@ export function GetUpdateProgress() {
 
 export function ImportEndpointsAsServers(arg1) {
   return window['go']['main']['App']['ImportEndpointsAsServers'](arg1);
+}
+
+export function InstallAddon(arg1) {
+  return window['go']['main']['App']['InstallAddon'](arg1);
 }
 
 export function IsGameInstalled() {
@@ -136,4 +156,12 @@ export function StartInstall() {
 
 export function StartUpdate() {
   return window['go']['main']['App']['StartUpdate']();
+}
+
+export function UninstallAddon(arg1) {
+  return window['go']['main']['App']['UninstallAddon'](arg1);
+}
+
+export function UpdateAddon(arg1) {
+  return window['go']['main']['App']['UpdateAddon'](arg1);
 }

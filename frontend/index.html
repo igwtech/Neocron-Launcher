@@ -71,6 +71,7 @@
                 <div class="modal-tabs">
                     <button class="tab active" data-tab="general">General</button>
                     <button class="tab" data-tab="runtime">Runtime</button>
+                    <button class="tab" data-tab="addons">Addons</button>
                 </div>
 
                 <!-- General tab -->
@@ -145,6 +146,24 @@
                             <input type="checkbox" id="setting-mangohud" />
                             <span>Enable MangoHud overlay</span>
                         </label>
+                    </div>
+                </div>
+
+                <!-- Addons tab -->
+                <div id="tab-addons" class="tab-content hidden">
+                    <div class="addon-input-row">
+                        <input type="text" id="addon-repo-url" placeholder="https://github.com/user/neocron-addon" />
+                        <button id="btn-addon-install" class="btn btn-primary" style="padding:8px 16px;">Install</button>
+                    </div>
+                    <div id="addon-progress" class="hidden">
+                        <div class="progress-track-sm">
+                            <div id="addon-progress-fill" class="progress-fill-sm"></div>
+                        </div>
+                        <div id="addon-progress-text" class="progress-text-sm"></div>
+                    </div>
+                    <div id="addon-list"></div>
+                    <div class="btn-row" style="margin-top:12px">
+                        <button id="btn-addon-check-updates" class="btn btn-secondary">Check for Updates</button>
                     </div>
                 </div>
 

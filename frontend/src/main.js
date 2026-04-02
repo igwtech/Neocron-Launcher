@@ -25,6 +25,13 @@ import {
     GetPrefixStatus,
     SetupPrefix,
     RunSysConfig,
+    GetInstalledAddons,
+    InstallAddon,
+    UninstallAddon,
+    EnableAddon,
+    DisableAddon,
+    UpdateAddon,
+    CheckAddonUpdates,
     APILogin,
     APILogout,
     APIIsSessionValid,
@@ -90,6 +97,7 @@ async function init() {
     updateMainButton();
     setupEvents();
     setupButtons();
+    setupAddonEvents();
 }
 
 async function loadVersions() {
@@ -496,6 +504,8 @@ function openSettingsModal() {
             tab.classList.add('active');
             document.getElementById('tab-general').classList.toggle('hidden', tab.dataset.tab !== 'general');
             document.getElementById('tab-runtime').classList.toggle('hidden', tab.dataset.tab !== 'runtime');
+            document.getElementById('tab-addons').classList.toggle('hidden', tab.dataset.tab !== 'addons');
+            if (tab.dataset.tab === 'addons') refreshAddons();
         };
     });
 
@@ -507,6 +517,27 @@ function openSettingsModal() {
     };
     document.getElementById('btn-download-proton').onclick = () => openProtonDownloadModal();
     document.getElementById('btn-setup-prefix').onclick = async () => { await SetupPrefix(); };
+    document.getElementById('btn-addon-install').onclick = async () => {
+        const url = document.getElementById('addon-repo-url').value.trim();
+        if (!url) return;
+        document.getElementById('addon-repo-url').value = '';
+        await InstallAddon(url);
+    };
+    document.getElementById('btn-addon-check-updates').onclick = async () => {
+        try {
+            const updates = await CheckAddonUpdates();
+            if (!updates || updates.length === 0) {
+                document.getElementById('addon-progress-text').textContent = 'All addons up to date';
+                document.getElementById('addon-progress').classList.remove('hidden');
+            } else {
+                document.getElementById('addon-progress-text').textContent = `${updates.length} update(s) available`;
+                document.getElementById('addon-progress').classList.remove('hidden');
+            }
+        } catch (e) {
+            document.getElementById('addon-progress-text').textContent = 'Error: ' + e;
+            document.getElementById('addon-progress').classList.remove('hidden');
+        }
+    };
     document.getElementById('btn-sysconfig').onclick = async () => {
         try { await RunSysConfig(); } catch (e) { alert('Graphics config failed: ' + e); }
     };
@@ -626,6 +657,85 @@ function openAddServerModal() {
         modal.classList.add('hidden');
     };
     document.getElementById('btn-server-add-cancel').onclick = () => modal.classList.add('hidden');
+}
+
+// --- Addons ---
+async function refreshAddons() {
+    const list = document.getElementById('addon-list');
+    try {
+        const addons = await GetInstalledAddons();
+        if (!addons || addons.length === 0) {
+            list.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; padding: 12px; text-align: center;">No addons installed. Paste a GitHub repo URL above to install one.</div>';
+            return;
+        }
+        list.innerHTML = '';
+        addons.forEach(a => {
+            const card = document.createElement('div');
+            card.className = 'addon-card' + (a.enabled ? '' : ' disabled');
+            card.innerHTML = `
+                <div class="addon-info">
+                    <div class="addon-name">
+                        ${esc(a.manifest.name)}
+                        <span class="category-badge ${a.manifest.category || 'other'}">${esc(a.manifest.category || 'other')}</span>
+                    </div>
+                    <div class="addon-meta">v${esc(a.version)} by ${esc(a.manifest.author || 'unknown')}</div>
+                    <div class="addon-desc">${esc(a.manifest.description || '')}</div>
+                </div>
+                <div class="addon-actions">
+                    <div class="addon-toggle ${a.enabled ? 'on' : ''}" data-id="${esc(a.id)}" title="${a.enabled ? 'Disable' : 'Enable'}"></div>
+                    <button class="btn btn-secondary addon-update-btn" data-id="${esc(a.id)}" style="padding:4px 8px;font-size:9px;">Update</button>
+                    <button class="btn-remove addon-remove-btn" data-id="${esc(a.id)}" title="Uninstall">&times;</button>
+                </div>
+            `;
+
+            card.querySelector('.addon-toggle').addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                const isOn = e.currentTarget.classList.contains('on');
+                try {
+                    if (isOn) { await DisableAddon(id); } else { await EnableAddon(id); }
+                    refreshAddons();
+                } catch (err) { alert('Toggle failed: ' + err); }
+            });
+
+            card.querySelector('.addon-remove-btn').addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                if (!confirm('Uninstall this addon? Original files will be restored.')) return;
+                try {
+                    await UninstallAddon(id);
+                    refreshAddons();
+                } catch (err) { alert('Uninstall failed: ' + err); }
+            });
+
+            card.querySelector('.addon-update-btn').addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                await UpdateAddon(id);
+            });
+
+            list.appendChild(card);
+        });
+    } catch (e) {
+        list.innerHTML = `<div style="color: var(--danger); font-size: 12px; padding: 12px;">Error: ${e}</div>`;
+    }
+}
+
+function setupAddonEvents() {
+    EventsOn('addon:progress', (p) => {
+        const prog = document.getElementById('addon-progress');
+        const fill = document.getElementById('addon-progress-fill');
+        const text = document.getElementById('addon-progress-text');
+        prog.classList.remove('hidden');
+        fill.style.width = p.percent.toFixed(1) + '%';
+        text.textContent = p.message || '';
+    });
+
+    EventsOn('addon:complete', () => {
+        document.getElementById('addon-progress-text').textContent = 'Done!';
+        refreshAddons();
+    });
+
+    EventsOn('addon:error', (err) => {
+        document.getElementById('addon-progress-text').textContent = 'Error: ' + err;
+    });
 }
 
 // --- Utility ---

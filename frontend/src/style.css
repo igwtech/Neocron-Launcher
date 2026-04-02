@@ -504,6 +504,119 @@ footer {
     font-size: 10px;
 }
 
+/* Addon cards */
+.addon-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.addon-input-row input { flex: 1; }
+
+#addon-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.addon-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+.addon-card.disabled { opacity: 0.5; }
+
+.addon-info { flex: 1; min-width: 0; }
+
+.addon-name {
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.addon-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.addon-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.category-badge {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 2px;
+    border: 1px solid;
+}
+
+.category-badge.graphics { border-color: var(--accent-dim); color: var(--accent); }
+.category-badge.audio { border-color: #9b59b6; color: #bb77dd; }
+.category-badge.ui { border-color: var(--success); color: var(--success); }
+.category-badge.scripts { border-color: #e67e22; color: #f0a050; }
+.category-badge.translation { border-color: #3498db; color: #5dade2; }
+.category-badge.effects { border-color: #e74c3c; color: #ec7063; }
+.category-badge.other { border-color: var(--text-muted); color: var(--text-secondary); }
+
+.addon-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.addon-toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.addon-toggle.on {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+}
+
+.addon-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.addon-toggle.on::after {
+    left: 18px;
+    background: #fff;
+}
+
 /* Tips */
 #tip-container {
     margin-top: 12px;

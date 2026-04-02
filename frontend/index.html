@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Neocron Launcher</title>
+</head>
+<body>
+    <div id="app">
+        <header id="titlebar">
+            <div class="title">NEOCRON LAUNCHER</div>
+            <div class="version-info">
+                <span>Local: <span id="local-version">--</span></span>
+                <span>Server: <span id="server-version">--</span></span>
+                <span id="runtime-badge" class="runtime-badge"></span>
+            </div>
+        </header>
+
+        <main>
+            <section id="server-panel">
+                <h2>SERVERS</h2>
+                <div id="server-list"></div>
+                <div class="btn-row">
+                    <button id="btn-add-server" class="btn btn-secondary">+ Add Server</button>
+                    <button id="btn-api-login" class="btn btn-secondary">API Login</button>
+                    <button id="btn-import-servers" class="btn btn-secondary hidden">Import Servers</button>
+                </div>
+            </section>
+
+            <section id="status-panel">
+                <div id="progress-container" class="hidden">
+                    <div id="progress-bar-track">
+                        <div id="progress-bar-fill"></div>
+                    </div>
+                    <div id="progress-text">Ready</div>
+                </div>
+            </section>
+
+            <!-- Game log panel -->
+            <section id="log-panel" class="hidden">
+                <div class="log-header">
+                    <h2>GAME LOG</h2>
+                    <button id="btn-toggle-log" class="btn btn-secondary">Hide</button>
+                </div>
+                <div id="log-output"></div>
+            </section>
+        </main>
+
+        <footer>
+            <div class="footer-left">
+                <button id="btn-settings" class="btn btn-icon" title="Settings">&#9881;</button>
+                <div id="runtime-status" class="status-indicator" title="Runtime status">
+                    <span class="status-dot"></span>
+                    <span class="status-label">Checking...</span>
+                </div>
+            </div>
+            <div class="footer-right">
+                <button id="btn-update" class="btn btn-primary">UPDATE</button>
+                <button id="btn-launch" class="btn btn-launch">LAUNCH</button>
+            </div>
+        </footer>
+
+        <!-- Settings modal -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-content modal-wide">
+                <div class="modal-tabs">
+                    <button class="tab active" data-tab="general">General</button>
+                    <button class="tab" data-tab="runtime">Runtime</button>
+                </div>
+
+                <!-- General tab -->
+                <div id="tab-general" class="tab-content">
+                    <label>
+                        Install Directory
+                        <div class="input-row">
+                            <input type="text" id="setting-install-dir" readonly />
+                            <button id="btn-browse" class="btn btn-secondary">Browse</button>
+                        </div>
+                    </label>
+                    <label>
+                        CDN Base URL
+                        <input type="text" id="setting-cdn-url" />
+                    </label>
+                    <label>
+                        Game Executable
+                        <input type="text" id="setting-game-exe" />
+                    </label>
+                    <label>
+                        API Base URL
+                        <input type="text" id="setting-api-url" placeholder="http://api.neocron-game.com:8100" />
+                    </label>
+                    <label>
+                        Extra Launch Arguments
+                        <input type="text" id="setting-launch-args" placeholder="e.g. -windowed" />
+                    </label>
+                </div>
+
+                <!-- Runtime tab -->
+                <div id="tab-runtime" class="tab-content hidden">
+                    <label>
+                        Runtime Mode
+                        <select id="setting-runtime-mode">
+                            <option value="proton">Proton</option>
+                            <option value="wine">Wine (system)</option>
+                            <option value="native">Native (Windows only)</option>
+                        </select>
+                    </label>
+
+                    <div id="proton-settings">
+                        <label>
+                            Proton Build
+                            <select id="setting-proton-build">
+                                <option value="">Auto-detect</option>
+                            </select>
+                        </label>
+                        <div class="btn-row">
+                            <button id="btn-download-proton" class="btn btn-secondary">Download GE-Proton</button>
+                            <button id="btn-setup-prefix" class="btn btn-secondary">Setup Prefix</button>
+                        </div>
+                        <div id="proton-progress" class="hidden">
+                            <div id="proton-progress-track" class="progress-track-sm">
+                                <div id="proton-progress-fill" class="progress-fill-sm"></div>
+                            </div>
+                            <div id="proton-progress-text" class="progress-text-sm"></div>
+                        </div>
+                        <div id="prefix-status" class="status-line"></div>
+                    </div>
+
+                    <div class="toggles">
+                        <label class="toggle-row">
+                            <input type="checkbox" id="setting-dxvk" />
+                            <span>Enable DXVK (recommended)</span>
+                        </label>
+                        <label class="toggle-row" id="gamemode-row">
+                            <input type="checkbox" id="setting-gamemode" />
+                            <span>Enable GameMode (Linux)</span>
+                        </label>
+                        <label class="toggle-row">
+                            <input type="checkbox" id="setting-mangohud" />
+                            <span>Enable MangoHud overlay</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button id="btn-settings-save" class="btn btn-primary">Save</button>
+                    <button id="btn-settings-cancel" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Server modal -->
+        <div id="add-server-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Add Server</h2>
+                <label>
+                    Name
+                    <input type="text" id="server-name" placeholder="My Server" />
+                </label>
+                <label>
+                    Description
+                    <input type="text" id="server-desc" placeholder="Description" />
+                </label>
+                <label>
+                    Address
+                    <input type="text" id="server-addr" placeholder="127.0.0.1" />
+                </label>
+                <label>
+                    Port
+                    <input type="number" id="server-port" value="7000" />
+                </label>
+                <div class="modal-actions">
+                    <button id="btn-server-add-confirm" class="btn btn-primary">Add</button>
+                    <button id="btn-server-add-cancel" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Update available banner -->
+        <div id="update-banner" class="banner hidden">
+            <span id="update-banner-text">Update available!</span>
+            <button id="btn-banner-update" class="btn btn-secondary">Update Now</button>
+            <button id="btn-banner-dismiss" class="btn btn-icon" style="font-size:14px">&times;</button>
+        </div>
+
+        <!-- Login modal -->
+        <div id="login-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>API Login</h2>
+                <label>
+                    Username
+                    <input type="text" id="login-user" placeholder="Username" />
+                </label>
+                <label>
+                    Password
+                    <input type="password" id="login-pass" placeholder="Password" />
+                </label>
+                <div id="login-error" class="status-line" style="color:var(--danger)"></div>
+                <div class="modal-actions">
+                    <button id="btn-login-submit" class="btn btn-primary">Login</button>
+                    <button id="btn-login-cancel" class="btn btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Proton download modal -->
+        <div id="proton-download-modal" class="modal hidden">
+            <div class="modal-content">
+                <h2>Download GE-Proton</h2>
+                <div id="proton-versions-list"></div>
+                <div id="proton-dl-progress" class="hidden">
+                    <div class="progress-track-sm">
+                        <div id="proton-dl-fill" class="progress-fill-sm"></div>
+                    </div>
+                    <div id="proton-dl-text" class="progress-text-sm"></div>
+                </div>
+                <div class="modal-actions">
+                    <button id="btn-proton-dl-cancel" class="btn btn-secondary">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

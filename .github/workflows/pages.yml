@@ -1,0 +1,142 @@
+name: Deploy Docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'wiki/**'
+      - '.github/workflows/pages.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build site
+        run: |
+          mkdir -p _site/screenshots _site/manual
+
+          # Copy screenshots
+          cp docs/screenshots/*.png _site/screenshots/ 2>/dev/null || true
+
+          # Convert wiki pages to site pages
+          for f in wiki/*.md; do
+            base=$(basename "$f")
+            cp "$f" "_site/${base}"
+          done
+
+          # Copy manual pages
+          for f in docs/manual/*.md; do
+            base=$(basename "$f")
+            cp "$f" "_site/manual/${base}"
+          done
+
+          # Generate index.html from Home.md
+          cat > _site/index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Neocron Launcher Documentation</title>
+            <style>
+              :root { --bg: #0a0c12; --bg2: #111621; --text: #e0e6f0; --text2: #7a8599; --accent: #00d4ff; --border: #1e2538; }
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+              .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+              h1 { font-family: 'Courier New', monospace; color: var(--accent); letter-spacing: 4px; margin-bottom: 8px; }
+              h2 { color: var(--accent); font-size: 14px; letter-spacing: 3px; text-transform: uppercase; margin: 32px 0 16px; font-family: 'Courier New', monospace; }
+              p, li { color: var(--text2); margin-bottom: 8px; }
+              a { color: var(--accent); text-decoration: none; }
+              a:hover { text-decoration: underline; }
+              .nav { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 24px 0; }
+              .nav a { display: block; padding: 16px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; transition: border-color 0.15s; }
+              .nav a:hover { border-color: var(--accent); text-decoration: none; }
+              .nav a .title { font-family: 'Courier New', monospace; font-size: 14px; color: var(--accent); }
+              .nav a .desc { font-size: 12px; color: var(--text2); margin-top: 4px; }
+              .screenshots { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+              .screenshots img { width: 100%; border-radius: 6px; border: 1px solid var(--border); }
+              .badge { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 10px; letter-spacing: 1px; border: 1px solid var(--accent); color: var(--accent); font-family: 'Courier New', monospace; margin-bottom: 16px; }
+              footer { margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--text2); font-size: 12px; text-align: center; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>NEOCRON LAUNCHER</h1>
+              <span class="badge">DOCUMENTATION</span>
+              <p>Cross-platform game launcher and installer for Neocron 2, built with Go and Wails.</p>
+
+              <h2>Guide</h2>
+              <div class="nav">
+                <a href="manual/installation.html"><div class="title">Installation</div><div class="desc">Download binaries or build from source</div></a>
+                <a href="manual/configuration.html"><div class="title">Configuration</div><div class="desc">Settings reference and config file</div></a>
+                <a href="manual/wine-setup.html"><div class="title">Wine / Proton Setup</div><div class="desc">Running Neocron on Linux and macOS</div></a>
+                <a href="manual/server-setup.html"><div class="title">Server Setup</div><div class="desc">Adding servers, API login, endpoints</div></a>
+                <a href="manual/troubleshooting.html"><div class="title">Troubleshooting</div><div class="desc">Common issues and fixes</div></a>
+              </div>
+
+              <h2>Screenshots</h2>
+              <div class="screenshots">
+                <img src="screenshots/main-installed.png" alt="Main screen">
+                <img src="screenshots/main-updating.png" alt="Updating">
+                <img src="screenshots/settings-general.png" alt="Settings - General">
+                <img src="screenshots/settings-runtime.png" alt="Settings - Runtime">
+                <img src="screenshots/add-server.png" alt="Add Server">
+                <img src="screenshots/login.png" alt="Login">
+              </div>
+
+              <h2>Source Code</h2>
+              <p><a href="https://github.com/igwtech/Neocron-Launcher">github.com/igwtech/Neocron-Launcher</a></p>
+
+              <footer>Neocron Launcher &mdash; Open Source</footer>
+            </div>
+          </body>
+          </html>
+          HTMLEOF
+
+          # Create simple HTML wrappers for markdown pages (GitHub Pages renders .md natively with Jekyll, but we use static)
+          for f in _site/manual/*.md _site/*.md; do
+            [ ! -f "$f" ] && continue
+            base=$(basename "$f" .md)
+            dir=$(dirname "$f")
+            # Keep .md files as-is — GitHub Pages with Jekyll will render them
+          done
+
+          # Add Jekyll config to render markdown
+          cat > _site/_config.yml << 'YMLEOF'
+          title: Neocron Launcher
+          description: Cross-platform game launcher for Neocron 2
+          theme: jekyll-theme-midnight
+          markdown: kramdown
+          YMLEOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,43 @@
+name: Sync Wiki
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'wiki/**'
+
+permissions:
+  contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  sync-wiki:
+    runs-on: ubuntu-latest
+    name: Sync wiki/ to GitHub Wiki
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Checkout wiki
+        uses: actions/checkout@v4
+        with:
+          repository: igwtech/Neocron-Launcher.wiki
+          path: .wiki
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sync wiki pages
+        run: |
+          cp wiki/*.md .wiki/
+          cd .wiki
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No wiki changes to commit"
+          else
+            git commit -m "Sync wiki from main branch"
+            git push
+          fi

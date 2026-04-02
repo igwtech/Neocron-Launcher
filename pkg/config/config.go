@@ -55,7 +55,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		InstallDir: filepath.Join(homeDir, "Neocron2"),
 		CDNBaseURL: "http://cdn.neocron-game.com/apps/nc2retail/files",
-		GameExe:    "nc2.exe",
+		GameExe:    "neocronclient.exe",
 		Servers: []ServerEndpoint{
 			{
 				Name:        "Local Server",

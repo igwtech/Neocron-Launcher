@@ -11,9 +11,10 @@ import (
 
 // PrefixStatus describes the state of a Wine/Proton prefix.
 type PrefixStatus struct {
-	Initialized bool   `json:"initialized"`
-	Path        string `json:"path"`
-	Message     string `json:"message"`
+	Initialized    bool   `json:"initialized"`
+	DepsInstalled  bool   `json:"depsInstalled"`
+	Path           string `json:"path"`
+	Message        string `json:"message"`
 }
 
 // PrefixManager handles Wine/Proton prefix creation and configuration.
@@ -44,56 +45,92 @@ func defaultPrefixPath() string {
 
 // GetStatus checks whether the prefix is initialized and usable.
 func (pm *PrefixManager) GetStatus() PrefixStatus {
+	initialized := false
+
 	systemReg := filepath.Join(pm.PrefixPath, "pfx", "system.reg")
 	if _, err := os.Stat(systemReg); err == nil {
-		return PrefixStatus{
-			Initialized: true,
-			Path:        pm.PrefixPath,
-			Message:     "Prefix ready",
-		}
+		initialized = true
 	}
-
-	// Also check the non-Proton Wine prefix layout
 	systemReg2 := filepath.Join(pm.PrefixPath, "system.reg")
 	if _, err := os.Stat(systemReg2); err == nil {
-		return PrefixStatus{
-			Initialized: true,
-			Path:        pm.PrefixPath,
-			Message:     "Prefix ready",
-		}
+		initialized = true
+	}
+
+	depsInstalled := false
+	depsMarker := filepath.Join(pm.PrefixPath, ".neocron-deps-installed")
+	if _, err := os.Stat(depsMarker); err == nil {
+		depsInstalled = true
+	}
+
+	msg := "Prefix needs setup"
+	if initialized && depsInstalled {
+		msg = "Prefix ready"
+	} else if initialized {
+		msg = "Prefix initialized, dependencies not installed"
 	}
 
 	return PrefixStatus{
-		Initialized: false,
-		Path:        pm.PrefixPath,
-		Message:     "Prefix needs setup",
+		Initialized:   initialized,
+		DepsInstalled: depsInstalled,
+		Path:          pm.PrefixPath,
+		Message:       msg,
 	}
 }
 
-// Setup initializes the prefix using the specified Proton build.
-// For Proton: runs "proton run" with a dummy command to bootstrap the prefix.
-// Falls back to wineboot if no Proton script is found.
+// Setup initializes the prefix and installs Neocron dependencies.
 func (pm *PrefixManager) Setup(protonBuildPath string, onOutput func(string)) error {
 	if err := os.MkdirAll(pm.PrefixPath, 0755); err != nil {
 		return fmt.Errorf("create prefix dir: %w", err)
 	}
 
-	protonScript := GetProtonScript(protonBuildPath)
-	if protonScript != "" {
-		return pm.setupViaProton(protonScript, protonBuildPath, onOutput)
+	emit := func(msg string) {
+		if onOutput != nil {
+			onOutput(msg)
+		}
 	}
 
-	wineBin := GetBuildWineBinary(protonBuildPath)
-	if wineBin != "" {
-		return pm.setupViaWine(wineBin, onOutput)
+	// Step 1: Initialize prefix
+	if !pm.GetStatus().Initialized {
+		protonScript := GetProtonScript(protonBuildPath)
+		if protonScript != "" {
+			if err := pm.setupViaProton(protonScript, protonBuildPath, onOutput); err != nil {
+				return err
+			}
+		} else {
+			wineBin := GetBuildWineBinary(protonBuildPath)
+			if wineBin == "" {
+				if path, err := exec.LookPath("wine"); err == nil {
+					wineBin = path
+				} else {
+					return fmt.Errorf("no Proton or Wine binary found in %s", protonBuildPath)
+				}
+			}
+			if err := pm.setupViaWine(wineBin, onOutput); err != nil {
+				return err
+			}
+		}
+	} else {
+		emit("Prefix already initialized, skipping...")
 	}
 
-	// Last resort: try system wine
-	if _, err := exec.LookPath("wine"); err == nil {
-		return pm.setupViaWine("wine", onOutput)
+	// Step 2: Set Windows version to Win98
+	emit("Setting Windows version to Windows 98...")
+	if err := pm.applyWin98Registry(protonBuildPath); err != nil {
+		emit(fmt.Sprintf("Warning: could not set Windows version: %v", err))
 	}
 
-	return fmt.Errorf("no Proton or Wine binary found in %s", protonBuildPath)
+	// Step 3: Install winetricks dependencies
+	if !pm.GetStatus().DepsInstalled {
+		emit("Installing Neocron dependencies (corefonts, vcrun6, mfc42)...")
+		if err := pm.InstallDependencies(protonBuildPath, onOutput); err != nil {
+			emit(fmt.Sprintf("Warning: dependency installation failed: %v", err))
+			// Don't fail the whole setup — game may still work
+		}
+	} else {
+		emit("Dependencies already installed, skipping...")
+	}
+
+	return nil
 }
 
 func (pm *PrefixManager) setupViaProton(protonScript, buildPath string, onOutput func(string)) error {
@@ -107,16 +144,13 @@ func (pm *PrefixManager) setupViaProton(protonScript, buildPath string, onOutput
 
 	env := pm.buildProtonEnv(buildPath)
 
-	// Run proton run with a harmless Windows command to init the prefix
 	cmd := exec.Command("python3", protonScript, "run", "cmd", "/c", "echo", "prefix initialized")
 	cmd.Env = env
 	cmd.Dir = buildPath
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		// Proton may return non-zero but still set up the prefix fine
 		emit(fmt.Sprintf("Proton output: %s", string(output)))
-		// Check if prefix was actually created despite the error
 		if pm.GetStatus().Initialized {
 			emit("Prefix initialized successfully (despite non-zero exit)")
 			return nil
@@ -125,12 +159,6 @@ func (pm *PrefixManager) setupViaProton(protonScript, buildPath string, onOutput
 	}
 
 	emit("Prefix initialized successfully")
-
-	// Set Windows version to Win10
-	if err := pm.setWindowsVersion(buildPath); err != nil {
-		emit(fmt.Sprintf("Warning: could not set Windows version: %v", err))
-	}
-
 	return nil
 }
 
@@ -151,7 +179,7 @@ func (pm *PrefixManager) setupViaWine(wineBinary string, onOutput func(string)) 
 	cmd := exec.Command(winebootPath, "--init")
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("WINEPREFIX=%s", pm.PrefixPath),
-		"WINEDEBUG=-all",
+		"WINEDEBUG=-all,err+module",
 	)
 
 	output, err := cmd.CombinedOutput()
@@ -168,30 +196,27 @@ func (pm *PrefixManager) setupViaWine(wineBinary string, onOutput func(string)) 
 	return nil
 }
 
-// setWindowsVersion sets the prefix to report as Windows 10.
-func (pm *PrefixManager) setWindowsVersion(buildPath string) error {
-	// Find the user.reg location
-	regPaths := []string{
-		filepath.Join(pm.PrefixPath, "pfx", "user.reg"),
-		filepath.Join(pm.PrefixPath, "user.reg"),
-	}
-
-	for _, regPath := range regPaths {
-		if _, err := os.Stat(regPath); err == nil {
-			// Use wine regedit via a .reg file
-			return pm.applyWin10Registry(buildPath, filepath.Dir(regPath))
-		}
-	}
-	return nil
-}
-
-func (pm *PrefixManager) applyWin10Registry(buildPath, prefixDir string) error {
+// applyWin98Registry sets Windows 98 compatibility for the game executables.
+func (pm *PrefixManager) applyWin98Registry(buildPath string) error {
 	regContent := `REGEDIT4
 
-[HKEY_CURRENT_USER\Software\Wine\AppDefaults\nc2.exe]
-"Version"="win10"
+[HKEY_CURRENT_USER\Software\Wine]
+"Version"="win98"
+
+[HKEY_CURRENT_USER\Software\Wine\AppDefaults\neocronclient.exe]
+"Version"="win98"
+
+[HKEY_CURRENT_USER\Software\Wine\AppDefaults\client.exe]
+"Version"="win98"
+
 `
-	tmpFile, err := os.CreateTemp("", "neocron-win10-*.reg")
+	// Find the actual prefix dir (Proton uses pfx/ subdirectory)
+	prefixDir := pm.PrefixPath
+	if _, err := os.Stat(filepath.Join(pm.PrefixPath, "pfx", "user.reg")); err == nil {
+		prefixDir = filepath.Join(pm.PrefixPath, "pfx")
+	}
+
+	tmpFile, err := os.CreateTemp("", "neocron-win98-*.reg")
 	if err != nil {
 		return err
 	}
@@ -212,22 +237,106 @@ func (pm *PrefixManager) applyWin10Registry(buildPath, prefixDir string) error {
 	cmd := exec.Command(regeditPath, tmpFile.Name())
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("WINEPREFIX=%s", prefixDir),
-		"WINEDEBUG=-all",
+		"WINEDEBUG=-all,err+module",
 	)
 	return cmd.Run()
+}
+
+// InstallDependencies runs winetricks to install Neocron's required libraries.
+func (pm *PrefixManager) InstallDependencies(protonBuildPath string, onOutput func(string)) error {
+	emit := func(msg string) {
+		if onOutput != nil {
+			onOutput(msg)
+		}
+	}
+
+	// Find winetricks
+	winetricksPath, err := exec.LookPath("winetricks")
+	if err != nil {
+		emit("winetricks not found in PATH — attempting to download...")
+		winetricksPath, err = pm.downloadWinetricks()
+		if err != nil {
+			return fmt.Errorf("winetricks not available: %w", err)
+		}
+	}
+
+	// Find the actual prefix dir
+	prefixDir := pm.PrefixPath
+	if _, err := os.Stat(filepath.Join(pm.PrefixPath, "pfx", "system.reg")); err == nil {
+		prefixDir = filepath.Join(pm.PrefixPath, "pfx")
+	}
+
+	// Build environment
+	env := os.Environ()
+	env = append(env,
+		fmt.Sprintf("WINEPREFIX=%s", prefixDir),
+		"WINEDEBUG=-all,err+module",
+	)
+
+	// Point winetricks to the Proton/custom wine binary if available
+	wineBin := GetBuildWineBinary(protonBuildPath)
+	if wineBin != "" {
+		env = append(env, fmt.Sprintf("WINE=%s", wineBin))
+		wineserverPath := filepath.Join(filepath.Dir(wineBin), "wineserver")
+		if _, err := os.Stat(wineserverPath); err == nil {
+			env = append(env, fmt.Sprintf("WINESERVER=%s", wineserverPath))
+		}
+	}
+
+	// Install dependencies: corefonts, vcrun6, mfc42
+	deps := []string{"corefonts", "vcrun6", "mfc42"}
+	for _, dep := range deps {
+		emit(fmt.Sprintf("Installing %s...", dep))
+
+		cmd := exec.Command(winetricksPath, "-q", dep)
+		cmd.Env = env
+
+		output, err := cmd.CombinedOutput()
+		if len(output) > 0 {
+			emit(string(output))
+		}
+		if err != nil {
+			emit(fmt.Sprintf("Warning: failed to install %s: %v", dep, err))
+			// Continue with other deps
+		} else {
+			emit(fmt.Sprintf("%s installed successfully", dep))
+		}
+	}
+
+	// Mark deps as installed
+	marker := filepath.Join(pm.PrefixPath, ".neocron-deps-installed")
+	os.WriteFile(marker, []byte("corefonts vcrun6 mfc42\n"), 0644)
+
+	emit("All dependencies installed")
+	return nil
+}
+
+// downloadWinetricks downloads winetricks to a local cache.
+func (pm *PrefixManager) downloadWinetricks() (string, error) {
+	cacheDir := filepath.Join(pm.PrefixPath, ".cache")
+	os.MkdirAll(cacheDir, 0755)
+	dest := filepath.Join(cacheDir, "winetricks")
+
+	cmd := exec.Command("curl", "-sL", "-o", dest,
+		"https://raw.githubusercontent.com/Winetricks/winetricks/master/src/winetricks")
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("download winetricks: %w", err)
+	}
+
+	os.Chmod(dest, 0755)
+	return dest, nil
 }
 
 // buildProtonEnv constructs the environment variables for running a game via Proton.
 func (pm *PrefixManager) buildProtonEnv(protonBuildPath string) []string {
 	env := os.Environ()
 
-	// Filter out any existing conflicting vars
 	var filtered []string
 	for _, e := range env {
 		key := strings.SplitN(e, "=", 2)[0]
 		switch key {
 		case "STEAM_COMPAT_DATA_PATH", "STEAM_COMPAT_CLIENT_INSTALL_PATH",
-			"WINEPREFIX", "WINEDEBUG":
+			"WINEPREFIX", "WINEDEBUG", "WINEDLLOVERRIDES":
 			continue
 		default:
 			filtered = append(filtered, e)
@@ -237,7 +346,8 @@ func (pm *PrefixManager) buildProtonEnv(protonBuildPath string) []string {
 	filtered = append(filtered,
 		fmt.Sprintf("STEAM_COMPAT_DATA_PATH=%s", pm.PrefixPath),
 		fmt.Sprintf("STEAM_COMPAT_CLIENT_INSTALL_PATH=%s", protonBuildPath),
-		"WINEDEBUG=-all",
+		"WINEDEBUG=-all,err+module",
+		"WINEDLLOVERRIDES=msvcrt=n;quartz=n",
 	)
 
 	return filtered
@@ -269,8 +379,8 @@ func (pm *PrefixManager) BuildGameEnv(protonBuildPath string, opts LaunchEnvOpts
 
 // LaunchEnvOpts configures the game launch environment.
 type LaunchEnvOpts struct {
-	EnableDXVK    bool
+	EnableDXVK     bool
 	EnableMangoHud bool
-	ServerAddress string
-	ServerPort    int
+	ServerAddress  string
+	ServerPort     int
 }

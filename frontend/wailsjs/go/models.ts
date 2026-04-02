@@ -270,6 +270,7 @@ export namespace proton {
 	}
 	export class PrefixStatus {
 	    initialized: boolean;
+	    depsInstalled: boolean;
 	    path: string;
 	    message: string;
 	
@@ -280,6 +281,7 @@ export namespace proton {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.initialized = source["initialized"];
+	        this.depsInstalled = source["depsInstalled"];
 	        this.path = source["path"];
 	        this.message = source["message"];
 	    }

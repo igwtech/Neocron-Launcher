@@ -314,6 +314,18 @@ func (a *App) GetGameStatus() launcher.GameStatus {
 
 // --- Utility ---
 
+func (a *App) RunSysConfig() error {
+	go func() {
+		err := launcher.RunSysConfig(a.cfg)
+		if err != nil {
+			wailsRuntime.EventsEmit(a.ctx, "sysconfig:error", err.Error())
+		} else {
+			wailsRuntime.EventsEmit(a.ctx, "sysconfig:complete", nil)
+		}
+	}()
+	return nil
+}
+
 func (a *App) SelectDirectory() (string, error) {
 	return wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "Select Neocron 2 Install Directory",

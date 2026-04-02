@@ -14,7 +14,32 @@ Cross-platform game launcher and installer for [Neocron 2](https://en.wikipedia.
 
 ## Screenshots
 
-*Coming soon*
+### Main Screen
+![Main screen - Installed](docs/screenshots/main-installed.png)
+
+### Installing / Updating
+![Updating](docs/screenshots/main-updating.png)
+
+### Settings
+| General | Runtime |
+|---------|---------|
+| ![General](docs/screenshots/settings-general.png) | ![Runtime](docs/screenshots/settings-runtime.png) |
+
+### Server Management
+| Add Server | API Login |
+|-----------|-----------|
+| ![Add Server](docs/screenshots/add-server.png) | ![Login](docs/screenshots/login.png) |
+
+> Screenshots are auto-generated with Playwright. Run `cd frontend && npm run screenshots` with `wails dev` running.
+
+## Documentation
+
+- [Wiki](https://github.com/igwtech/Neocron-Launcher/wiki) — Full user manual
+- [Installation Guide](docs/manual/installation.md)
+- [Configuration](docs/manual/configuration.md)
+- [Wine/Proton Setup](docs/manual/wine-setup.md)
+- [Server Setup](docs/manual/server-setup.md)
+- [Troubleshooting](docs/manual/troubleshooting.md)
 
 ## Building
 

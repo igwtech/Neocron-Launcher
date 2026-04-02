@@ -24,6 +24,7 @@ import {
     SetProtonBuild,
     GetPrefixStatus,
     SetupPrefix,
+    RunSysConfig,
     APILogin,
     APILogout,
     APIIsSessionValid,
@@ -443,6 +444,9 @@ function openSettingsModal() {
     };
     document.getElementById('btn-download-proton').onclick = () => openProtonDownloadModal();
     document.getElementById('btn-setup-prefix').onclick = async () => { await SetupPrefix(); };
+    document.getElementById('btn-sysconfig').onclick = async () => {
+        try { await RunSysConfig(); } catch (e) { alert('Graphics config failed: ' + e); }
+    };
 
     document.getElementById('btn-settings-save').onclick = async () => {
         config.installDir = document.getElementById('setting-install-dir').value;

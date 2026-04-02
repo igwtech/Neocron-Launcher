@@ -102,11 +102,12 @@ func (l *Launcher) Launch(cfg *config.Config, onOutput func(string), onExit func
 		env = append(env,
 			fmt.Sprintf("NC_SERVER=%s", server.Address),
 			fmt.Sprintf("NC_PORT=%d", server.Port),
+			"WINEDEBUG=-all,err+module",
+			"WINEDLLOVERRIDES=msvcrt=n;quartz=n",
 		)
 		if cfg.PrefixPath != "" {
 			env = append(env, fmt.Sprintf("WINEPREFIX=%s", cfg.PrefixPath))
 		}
-		env = append(env, "WINEDEBUG=-all")
 
 	default:
 		return fmt.Errorf("unsupported runtime mode: %s", cfg.RuntimeMode)
@@ -208,4 +209,49 @@ func (l *Launcher) Kill() error {
 		return fmt.Errorf("no game running")
 	}
 	return l.cmd.Process.Kill()
+}
+
+// RunSysConfig launches the game's graphics configuration dialog via Wine.
+func RunSysConfig(cfg *config.Config) error {
+	exePath := filepath.Join(cfg.InstallDir, cfg.GameExe)
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command(exePath, "-sysconfig")
+	} else if cfg.RuntimeMode == "proton" && cfg.ProtonPath != "" {
+		protonScript := proton.GetProtonScript(cfg.ProtonPath)
+		if protonScript != "" {
+			prefixMgr := proton.NewPrefixManager(cfg.PrefixPath)
+			env := prefixMgr.BuildGameEnv(cfg.ProtonPath, proton.LaunchEnvOpts{})
+			cmd = exec.Command("python3", protonScript, "run", exePath, "-sysconfig")
+			cmd.Env = env
+		} else {
+			wineBin := proton.GetBuildWineBinary(cfg.ProtonPath)
+			if wineBin == "" {
+				return fmt.Errorf("no wine binary in Proton build")
+			}
+			cmd = exec.Command(wineBin, exePath, "-sysconfig")
+		}
+	} else {
+		winePath, err := exec.LookPath("wine")
+		if err != nil {
+			return fmt.Errorf("wine not found in PATH")
+		}
+		cmd = exec.Command(winePath, exePath, "-sysconfig")
+	}
+
+	cmd.Dir = cfg.InstallDir
+	if cmd.Env == nil {
+		env := os.Environ()
+		env = append(env,
+			"WINEDEBUG=-all,err+module",
+			"WINEDLLOVERRIDES=msvcrt=n;quartz=n",
+		)
+		if cfg.PrefixPath != "" {
+			env = append(env, fmt.Sprintf("WINEPREFIX=%s", cfg.PrefixPath))
+		}
+		cmd.Env = env
+	}
+
+	return cmd.Run()
 }

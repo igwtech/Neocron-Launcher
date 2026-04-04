@@ -708,7 +708,11 @@ async function refreshAddons() {
 
             card.querySelector('.addon-update-btn').addEventListener('click', async (e) => {
                 const id = e.currentTarget.dataset.id;
-                await UpdateAddon(id);
+                try {
+                    document.getElementById('addon-progress').classList.remove('hidden');
+                    document.getElementById('addon-progress-text').textContent = 'Updating...';
+                    await UpdateAddon(id);
+                } catch (err) { alert('Update failed: ' + err); }
             });
 
             list.appendChild(card);
@@ -729,8 +733,15 @@ function setupAddonEvents() {
     });
 
     EventsOn('addon:complete', () => {
-        document.getElementById('addon-progress-text').textContent = 'Done!';
+        const fill = document.getElementById('addon-progress-fill');
+        const text = document.getElementById('addon-progress-text');
+        fill.style.width = '100%';
+        text.textContent = 'Installed successfully!';
         refreshAddons();
+        setTimeout(() => {
+            document.getElementById('addon-progress').classList.add('hidden');
+            fill.style.width = '0%';
+        }, 3000);
     });
 
     EventsOn('addon:error', (err) => {

@@ -56,6 +56,13 @@ func (l *Launcher) Launch(cfg *config.Config, onOutput func(string), onExit func
 		return fmt.Errorf("no server selected")
 	}
 
+	// Write server address to neocron.ini before launching
+	if err := writeServerConfig(cfg.InstallDir, server.Address, server.Port); err != nil {
+		if onOutput != nil {
+			onOutput(fmt.Sprintf("[launcher] Warning: could not update neocron.ini: %v", err))
+		}
+	}
+
 	exePath := filepath.Join(cfg.InstallDir, cfg.GameExe)
 
 	var cmd *exec.Cmd
@@ -76,8 +83,6 @@ func (l *Launcher) Launch(cfg *config.Config, onOutput func(string), onExit func
 		envOpts := proton.LaunchEnvOpts{
 			EnableDXVK:     cfg.EnableDXVK,
 			EnableMangoHud: cfg.EnableMangoHud,
-			ServerAddress:  server.Address,
-			ServerPort:     server.Port,
 		}
 		env = prefixMgr.BuildGameEnv(protonPath, envOpts)
 
@@ -100,8 +105,6 @@ func (l *Launcher) Launch(cfg *config.Config, onOutput func(string), onExit func
 		cmd = exec.Command(winePath, exePath)
 		env = os.Environ()
 		env = append(env,
-			fmt.Sprintf("NC_SERVER=%s", server.Address),
-			fmt.Sprintf("NC_PORT=%d", server.Port),
 			"WINEDEBUG=-all,err+module",
 			"WINEDLLOVERRIDES=quartz=n,b",
 		)
@@ -209,6 +212,84 @@ func (l *Launcher) Kill() error {
 		return fmt.Errorf("no game running")
 	}
 	return l.cmd.Process.Kill()
+}
+
+// writeServerConfig updates server address in both neocron.ini and ini/updater.ini.
+// The Neocron 2 client reads GAMESERVERIP from ini/updater.ini and NETBASEIP from neocron.ini.
+func writeServerConfig(installDir, address string, port int) error {
+	// 1. Update neocron.ini — NETBASEIP
+	if err := updateIniKey(
+		filepath.Join(installDir, "neocron.ini"),
+		"NETBASEIP",
+		fmt.Sprintf("\"%s:%d\"", address, port),
+	); err != nil {
+		return fmt.Errorf("neocron.ini: %w", err)
+	}
+
+	// 2. Update ini/updater.ini — GAMESERVERIP and SERVERIP
+	updaterPath := filepath.Join(installDir, "ini", "updater.ini")
+	if err := updateIniKey(updaterPath, "GAMESERVERIP", address); err != nil {
+		return fmt.Errorf("updater.ini GAMESERVERIP: %w", err)
+	}
+	if err := updateIniKey(updaterPath, "SERVERIP", address); err != nil {
+		return fmt.Errorf("updater.ini SERVERIP: %w", err)
+	}
+
+	return nil
+}
+
+// updateIniKey reads an ini-style file and replaces or appends a key=value pair.
+// Supports both `KEY = "value"` (neocron.ini) and `KEY=value` (updater.ini) formats.
+// Preserves original line endings (\r\n or \n) and all existing content.
+func updateIniKey(path, key, value string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			dir := filepath.Dir(path)
+			os.MkdirAll(dir, 0755)
+			return os.WriteFile(path, []byte(fmt.Sprintf("%s=%s\n", key, value)), 0644)
+		}
+		return err
+	}
+
+	content := string(data)
+
+	// Detect line ending style
+	lineEnding := "\n"
+	if strings.Contains(content, "\r\n") {
+		lineEnding = "\r\n"
+	}
+
+	lines := strings.Split(content, lineEnding)
+	found := false
+
+	for i, line := range lines {
+		// Strip any remaining \r for comparison
+		trimmed := strings.TrimSpace(line)
+
+		// Match KEY= or KEY = (with optional spaces around =)
+		if strings.HasPrefix(trimmed, key+"=") || strings.HasPrefix(trimmed, key+" =") || strings.HasPrefix(trimmed, key+" ") {
+			// Preserve the original format style
+			if strings.Contains(line, " = ") {
+				lines[i] = fmt.Sprintf("%s = %s", key, value)
+			} else {
+				lines[i] = fmt.Sprintf("%s=%s", key, value)
+			}
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		// Append before the last line if it's empty (preserve trailing newline)
+		if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "" {
+			lines = append(lines[:len(lines)-1], fmt.Sprintf("%s=%s", key, value), "")
+		} else {
+			lines = append(lines, fmt.Sprintf("%s=%s", key, value))
+		}
+	}
+
+	return os.WriteFile(path, []byte(strings.Join(lines, lineEnding)), 0644)
 }
 
 // RunSysConfig launches the game's graphics configuration dialog via Wine.

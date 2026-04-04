@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"launcher/pkg/addon"
 	"launcher/pkg/config"
 	"launcher/pkg/launcher"
 	"launcher/pkg/neocronapi"
@@ -30,6 +31,7 @@ type App struct {
 	prefixMgr    *proton.PrefixManager
 	gameLauncher *launcher.Launcher
 	apiClient    *neocronapi.Client
+	addonMgr     *addon.Manager
 }
 
 func NewApp() *App {
@@ -50,6 +52,7 @@ func (a *App) startup(ctx context.Context) {
 	a.prefixMgr = proton.NewPrefixManager(cfg.PrefixPath)
 	a.gameLauncher = launcher.NewLauncher()
 	a.apiClient = neocronapi.NewClient(cfg.APIBaseURL)
+	a.addonMgr = addon.NewManager(cfg.InstallDir)
 
 	// Auto-check for updates on startup
 	go func() {
@@ -313,6 +316,56 @@ func (a *App) GetGameStatus() launcher.GameStatus {
 }
 
 // --- Utility ---
+
+// --- Addon bindings ---
+
+func (a *App) GetInstalledAddons() ([]addon.InstalledAddon, error) {
+	return a.addonMgr.ListInstalled()
+}
+
+func (a *App) InstallAddon(repoURL string) error {
+	go func() {
+		err := a.addonMgr.InstallFromRepo(repoURL, func(p addon.DownloadProgress) {
+			wailsRuntime.EventsEmit(a.ctx, "addon:progress", p)
+		})
+		if err != nil {
+			wailsRuntime.EventsEmit(a.ctx, "addon:error", err.Error())
+		} else {
+			wailsRuntime.EventsEmit(a.ctx, "addon:complete", nil)
+		}
+	}()
+	return nil
+}
+
+func (a *App) UninstallAddon(addonID string) error {
+	return a.addonMgr.Uninstall(addonID)
+}
+
+func (a *App) EnableAddon(addonID string) error {
+	return a.addonMgr.Enable(addonID)
+}
+
+func (a *App) DisableAddon(addonID string) error {
+	return a.addonMgr.Disable(addonID)
+}
+
+func (a *App) UpdateAddon(addonID string) error {
+	go func() {
+		err := a.addonMgr.Update(addonID, func(p addon.DownloadProgress) {
+			wailsRuntime.EventsEmit(a.ctx, "addon:progress", p)
+		})
+		if err != nil {
+			wailsRuntime.EventsEmit(a.ctx, "addon:error", err.Error())
+		} else {
+			wailsRuntime.EventsEmit(a.ctx, "addon:complete", nil)
+		}
+	}()
+	return nil
+}
+
+func (a *App) CheckAddonUpdates() ([]addon.AddonUpdate, error) {
+	return a.addonMgr.CheckUpdates()
+}
 
 func (a *App) RunSysConfig() error {
 	go func() {

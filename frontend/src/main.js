@@ -25,6 +25,13 @@ import {
     GetPrefixStatus,
     SetupPrefix,
     RunSysConfig,
+    GetInstalledAddons,
+    InstallAddon,
+    UninstallAddon,
+    EnableAddon,
+    DisableAddon,
+    UpdateAddon,
+    CheckAddonUpdates,
     APILogin,
     APILogout,
     APIIsSessionValid,
@@ -43,6 +50,40 @@ let gameRunning = false;
 let logVisible = false;
 let gameInstalled = false;
 let loggedIn = false;
+let tipInterval = null;
+
+const TIPS = [
+    "Neocron is one of the world's first Cyberpunk MMORPGs, released in September 2002.",
+    "The planet has been turned into a toxic wasteland — humanity survives in protective domed cities.",
+    "Combat is action-oriented, first-person shooter style — no auto-targeting!",
+    "Choose your faction wisely: 6 Pro City, 4 Anti City, and 1 Neutral faction to pick from.",
+    "City Administration is a recommended Pro City faction for newcomers.",
+    "Switching factions costs 300,000 credits and requires 50+ Faction Sympathy.",
+    "Every time you level up a main skill, you receive 5 Skill Points for subskills.",
+    "There are 5 core abilities: Intelligence, Strength, Constitution, Dexterity, and PSI Power.",
+    "Skill point costs escalate: levels 0-50 cost 1 point, 51-75 cost 2, 76-100 cost 3, and 101+ cost 5.",
+    "Implants are grafted into 13 body slots: brain, bone, eye, heart, hand, and backbone.",
+    "For tech level 30+ implants, carry Implant Disinfection Gel in your inventory.",
+    "Headshots deal 120% damage, torso 100%, and legs 80% plus a speed reduction.",
+    "Always carry medkits, stamina boosters, ammo, and healing nanites when leaving safe zones.",
+    "In team battles, prioritize APUs first, then Spies, then resurrecting players.",
+    "Use area-of-effect weapons when facing Spies who rely on stealth.",
+    "Dungeons are non-instanced — multiple players compete for hunting privileges.",
+    "City dungeons scale by player rank: Very Easy for 1-10 up to Very Hard for 40+.",
+    "Most items can be constructed or cloned in-game through the crafting system.",
+    "Open the Hypercom with F1 to access chat channels — many players use the Help channel.",
+    "The number one factor in successful team fights is coordination — designate a target caller.",
+    "Maintain at least two weapons with different damage types for PvP encounters.",
+    "The Pathfinder Recon Officer at E12 provides detailed dungeon information in-game.",
+    "Wasteland dungeons like Chaos Caves and Regants Legacy require well-coordinated teams.",
+    "Intelligence skill enables tradeskilling and improves weapon usability.",
+    "High-tech implants may degrade during combat and can pop out if you die.",
+    "The game became completely free-to-play in August 2012.",
+    "Your rank displays as Combat Rank / Base Rank — combat from weapons, base from abilities.",
+    "When asking another player to install implants ('poking'), tip 1,000-20,000 credits.",
+    "The Law Enforcer Chip separates PvP and PvE players in certain zones.",
+    "Neocron features a player-driven economy with crafting, trading, and rare item hunting.",
+];
 
 // --- Init ---
 async function init() {
@@ -56,6 +97,7 @@ async function init() {
     updateMainButton();
     setupEvents();
     setupButtons();
+    setupAddonEvents();
 }
 
 async function loadVersions() {
@@ -119,6 +161,30 @@ async function updateRuntimeStatus() {
         dot.className = 'status-dot yellow';
         label.textContent = 'Prefix needs setup';
     }
+}
+
+// --- Tips rotation ---
+function startTips() {
+    const container = document.getElementById('tip-container');
+    const textEl = document.getElementById('tip-text');
+    container.classList.remove('hidden');
+    showRandomTip(textEl, container);
+    tipInterval = setInterval(() => showRandomTip(textEl, container), 8000);
+}
+
+function stopTips() {
+    if (tipInterval) { clearInterval(tipInterval); tipInterval = null; }
+    document.getElementById('tip-container').classList.add('hidden');
+}
+
+function showRandomTip(textEl, container) {
+    container.classList.add('fade-out');
+    container.classList.remove('fade-in');
+    setTimeout(() => {
+        textEl.textContent = TIPS[Math.floor(Math.random() * TIPS.length)];
+        container.classList.remove('fade-out');
+        container.classList.add('fade-in');
+    }, 500);
 }
 
 function formatSpeed(bytesPerSec) {
@@ -196,6 +262,7 @@ function setupEvents() {
             : 'Complete!';
         updating = false;
         gameInstalled = true;
+        stopTips();
         updateMainButton();
         loadVersions();
     });
@@ -208,6 +275,7 @@ function setupEvents() {
         }
         fill.style.width = '0%';
         updating = false;
+        stopTips();
         updateMainButton();
     });
 
@@ -277,12 +345,14 @@ function setupButtons() {
         if (updating) {
             await CancelUpdate();
             updating = false;
+            stopTips();
             updateMainButton();
             return;
         }
         updating = true;
         updateMainButton();
         document.getElementById('progress-container').classList.remove('hidden');
+        startTips();
         if (gameInstalled) {
             await StartUpdate();
         } else {
@@ -320,6 +390,7 @@ function setupButtons() {
         updating = true;
         updateMainButton();
         document.getElementById('progress-container').classList.remove('hidden');
+        startTips();
         await StartUpdate();
     });
     document.getElementById('btn-banner-dismiss').addEventListener('click', () => {
@@ -433,6 +504,8 @@ function openSettingsModal() {
             tab.classList.add('active');
             document.getElementById('tab-general').classList.toggle('hidden', tab.dataset.tab !== 'general');
             document.getElementById('tab-runtime').classList.toggle('hidden', tab.dataset.tab !== 'runtime');
+            document.getElementById('tab-addons').classList.toggle('hidden', tab.dataset.tab !== 'addons');
+            if (tab.dataset.tab === 'addons') refreshAddons();
         };
     });
 
@@ -444,6 +517,27 @@ function openSettingsModal() {
     };
     document.getElementById('btn-download-proton').onclick = () => openProtonDownloadModal();
     document.getElementById('btn-setup-prefix').onclick = async () => { await SetupPrefix(); };
+    document.getElementById('btn-addon-install').onclick = async () => {
+        const url = document.getElementById('addon-repo-url').value.trim();
+        if (!url) return;
+        document.getElementById('addon-repo-url').value = '';
+        await InstallAddon(url);
+    };
+    document.getElementById('btn-addon-check-updates').onclick = async () => {
+        try {
+            const updates = await CheckAddonUpdates();
+            if (!updates || updates.length === 0) {
+                document.getElementById('addon-progress-text').textContent = 'All addons up to date';
+                document.getElementById('addon-progress').classList.remove('hidden');
+            } else {
+                document.getElementById('addon-progress-text').textContent = `${updates.length} update(s) available`;
+                document.getElementById('addon-progress').classList.remove('hidden');
+            }
+        } catch (e) {
+            document.getElementById('addon-progress-text').textContent = 'Error: ' + e;
+            document.getElementById('addon-progress').classList.remove('hidden');
+        }
+    };
     document.getElementById('btn-sysconfig').onclick = async () => {
         try { await RunSysConfig(); } catch (e) { alert('Graphics config failed: ' + e); }
     };
@@ -563,6 +657,96 @@ function openAddServerModal() {
         modal.classList.add('hidden');
     };
     document.getElementById('btn-server-add-cancel').onclick = () => modal.classList.add('hidden');
+}
+
+// --- Addons ---
+async function refreshAddons() {
+    const list = document.getElementById('addon-list');
+    try {
+        const addons = await GetInstalledAddons();
+        if (!addons || addons.length === 0) {
+            list.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; padding: 12px; text-align: center;">No addons installed. Paste a GitHub repo URL above to install one.</div>';
+            return;
+        }
+        list.innerHTML = '';
+        addons.forEach(a => {
+            const card = document.createElement('div');
+            card.className = 'addon-card' + (a.enabled ? '' : ' disabled');
+            card.innerHTML = `
+                <div class="addon-info">
+                    <div class="addon-name">
+                        ${esc(a.manifest.name)}
+                        <span class="category-badge ${a.manifest.category || 'other'}">${esc(a.manifest.category || 'other')}</span>
+                    </div>
+                    <div class="addon-meta">v${esc(a.version)} by ${esc(a.manifest.author || 'unknown')}</div>
+                    <div class="addon-desc">${esc(a.manifest.description || '')}</div>
+                </div>
+                <div class="addon-actions">
+                    <div class="addon-toggle ${a.enabled ? 'on' : ''}" data-id="${esc(a.id)}" title="${a.enabled ? 'Disable' : 'Enable'}"></div>
+                    <button class="btn btn-secondary addon-update-btn" data-id="${esc(a.id)}" style="padding:4px 8px;font-size:9px;">Update</button>
+                    <button class="btn-remove addon-remove-btn" data-id="${esc(a.id)}" title="Uninstall">&times;</button>
+                </div>
+            `;
+
+            card.querySelector('.addon-toggle').addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                const isOn = e.currentTarget.classList.contains('on');
+                try {
+                    if (isOn) { await DisableAddon(id); } else { await EnableAddon(id); }
+                    refreshAddons();
+                } catch (err) { alert('Toggle failed: ' + err); }
+            });
+
+            card.querySelector('.addon-remove-btn').addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                if (!confirm('Uninstall this addon? Original files will be restored.')) return;
+                try {
+                    await UninstallAddon(id);
+                    refreshAddons();
+                } catch (err) { alert('Uninstall failed: ' + err); }
+            });
+
+            card.querySelector('.addon-update-btn').addEventListener('click', async (e) => {
+                const id = e.currentTarget.dataset.id;
+                try {
+                    document.getElementById('addon-progress').classList.remove('hidden');
+                    document.getElementById('addon-progress-text').textContent = 'Updating...';
+                    await UpdateAddon(id);
+                } catch (err) { alert('Update failed: ' + err); }
+            });
+
+            list.appendChild(card);
+        });
+    } catch (e) {
+        list.innerHTML = `<div style="color: var(--danger); font-size: 12px; padding: 12px;">Error: ${e}</div>`;
+    }
+}
+
+function setupAddonEvents() {
+    EventsOn('addon:progress', (p) => {
+        const prog = document.getElementById('addon-progress');
+        const fill = document.getElementById('addon-progress-fill');
+        const text = document.getElementById('addon-progress-text');
+        prog.classList.remove('hidden');
+        fill.style.width = p.percent.toFixed(1) + '%';
+        text.textContent = p.message || '';
+    });
+
+    EventsOn('addon:complete', () => {
+        const fill = document.getElementById('addon-progress-fill');
+        const text = document.getElementById('addon-progress-text');
+        fill.style.width = '100%';
+        text.textContent = 'Installed successfully!';
+        refreshAddons();
+        setTimeout(() => {
+            document.getElementById('addon-progress').classList.add('hidden');
+            fill.style.width = '0%';
+        }, 3000);
+    });
+
+    EventsOn('addon:error', (err) => {
+        document.getElementById('addon-progress-text').textContent = 'Error: ' + err;
+    });
 }
 
 // --- Utility ---

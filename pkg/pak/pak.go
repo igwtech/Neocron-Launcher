@@ -3,6 +3,7 @@ package pak
 import (
 	"bytes"
 	"compress/flate"
+	"compress/zlib"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -82,15 +83,41 @@ func DecompressSingleFromMemory(data []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	fr := flate.NewReader(r)
-	defer fr.Close()
+	// Detect zlib header (78 01, 78 5e, 78 9c, 78 da) vs raw deflate
+	decompReader, err := newDecompReader(r)
+	if err != nil {
+		return nil, fmt.Errorf("create decompressor: %w", err)
+	}
+	defer decompReader.Close()
 
 	buf := make([]byte, uncompSize)
-	_, err := io.ReadFull(fr, buf)
+	_, err = io.ReadFull(decompReader, buf)
 	if err != nil {
 		return nil, fmt.Errorf("inflate: %w", err)
 	}
 	return buf, nil
+}
+
+// newDecompReader detects whether data has a zlib header and returns
+// the appropriate decompressor. PAK files may use either raw deflate
+// or zlib-wrapped deflate.
+func newDecompReader(r io.Reader) (io.ReadCloser, error) {
+	// Peek at first 2 bytes to detect zlib header
+	var header [2]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil {
+		return nil, err
+	}
+
+	// Reconstruct a reader with the peeked bytes prepended
+	combined := io.MultiReader(bytes.NewReader(header[:]), r)
+
+	// Zlib headers: 78 01 (no compression), 78 5e (fast), 78 9c (default), 78 da (best)
+	if header[0] == 0x78 && (header[1] == 0x01 || header[1] == 0x5e || header[1] == 0x9c || header[1] == 0xda) {
+		return zlib.NewReader(combined)
+	}
+
+	// Raw deflate
+	return flate.NewReaderDict(combined, nil), nil
 }
 
 func decompressSingle(r io.Reader, outPath string) error {
@@ -120,10 +147,13 @@ func decompressSingle(r io.Reader, outPath string) error {
 	}
 	defer out.Close()
 
-	fr := flate.NewReader(r)
-	defer fr.Close()
+	dr, err := newDecompReader(r)
+	if err != nil {
+		return fmt.Errorf("create decompressor: %w", err)
+	}
+	defer dr.Close()
 
-	written, err := io.Copy(out, fr)
+	written, err := io.Copy(out, dr)
 	if err != nil {
 		return fmt.Errorf("inflate: %w", err)
 	}

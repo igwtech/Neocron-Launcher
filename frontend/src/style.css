@@ -28,10 +28,52 @@ body {
     user-select: none;
 }
 
+/* Animated cyberpunk background */
+#background {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: -1;
+    background:
+        radial-gradient(ellipse at 20% 50%, rgba(0, 212, 255, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(0, 100, 180, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 60% 80%, rgba(0, 50, 120, 0.06) 0%, transparent 40%),
+        linear-gradient(180deg, #060810 0%, #0a0e1a 40%, #0d1220 70%, #080c16 100%);
+    animation: bg-shift 30s ease-in-out infinite alternate;
+}
+
+@keyframes bg-shift {
+    0% {
+        background-position: 0% 0%, 100% 0%, 50% 100%, 0% 0%;
+    }
+    50% {
+        background-position: 30% 20%, 70% 40%, 40% 60%, 0% 0%;
+    }
+    100% {
+        background-position: 10% 40%, 90% 10%, 60% 80%, 0% 0%;
+    }
+}
+
+/* Scanline overlay effect */
+#background::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 2px,
+        rgba(0, 212, 255, 0.008) 2px,
+        rgba(0, 212, 255, 0.008) 4px
+    );
+    pointer-events: none;
+}
+
 #app {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    position: relative;
+    z-index: 1;
 }
 
 /* Header */
@@ -460,6 +502,150 @@ footer {
 .proton-version-item .btn {
     padding: 4px 12px;
     font-size: 10px;
+}
+
+/* Addon cards */
+.addon-input-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.addon-input-row input { flex: 1; }
+
+#addon-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.addon-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+}
+
+.addon-card.disabled { opacity: 0.5; }
+
+.addon-info { flex: 1; min-width: 0; }
+
+.addon-name {
+    font-size: 13px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.addon-meta {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.addon-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.category-badge {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 1px 6px;
+    border-radius: 2px;
+    border: 1px solid;
+}
+
+.category-badge.graphics { border-color: var(--accent-dim); color: var(--accent); }
+.category-badge.audio { border-color: #9b59b6; color: #bb77dd; }
+.category-badge.ui { border-color: var(--success); color: var(--success); }
+.category-badge.scripts { border-color: #e67e22; color: #f0a050; }
+.category-badge.translation { border-color: #3498db; color: #5dade2; }
+.category-badge.effects { border-color: #e74c3c; color: #ec7063; }
+.category-badge.other { border-color: var(--text-muted); color: var(--text-secondary); }
+
+.addon-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.addon-toggle {
+    position: relative;
+    width: 36px;
+    height: 20px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.addon-toggle.on {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+}
+
+.addon-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    background: var(--text-secondary);
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+
+.addon-toggle.on::after {
+    left: 18px;
+    background: #fff;
+}
+
+/* Tips */
+#tip-container {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(0, 212, 255, 0.04);
+    border-left: 2px solid var(--accent-dim);
+    border-radius: 0 4px 4px 0;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    transition: opacity 0.5s ease;
+}
+
+#tip-container.fade-out { opacity: 0; }
+#tip-container.fade-in { opacity: 1; }
+
+.tip-label {
+    font-family: var(--font-mono);
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--accent-dim);
+    display: block;
+    margin-bottom: 4px;
+}
+
+#tip-text {
+    color: var(--text-primary);
+    font-size: 12px;
 }
 
 /* Update banner */

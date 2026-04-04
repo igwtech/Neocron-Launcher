@@ -367,13 +367,6 @@ func (pm *PrefixManager) BuildGameEnv(protonBuildPath string, opts LaunchEnvOpts
 		env = append(env, "MANGOHUD=1")
 	}
 
-	if opts.ServerAddress != "" {
-		env = append(env, fmt.Sprintf("NC_SERVER=%s", opts.ServerAddress))
-	}
-	if opts.ServerPort > 0 {
-		env = append(env, fmt.Sprintf("NC_PORT=%d", opts.ServerPort))
-	}
-
 	return env
 }
 
@@ -381,6 +374,4 @@ func (pm *PrefixManager) BuildGameEnv(protonBuildPath string, opts LaunchEnvOpts
 type LaunchEnvOpts struct {
 	EnableDXVK     bool
 	EnableMangoHud bool
-	ServerAddress  string
-	ServerPort     int
 }

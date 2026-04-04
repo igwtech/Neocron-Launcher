@@ -1,3 +1,130 @@
+export namespace addon {
+	
+	export class FileEntry {
+	    src: string;
+	    dst: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FileEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.src = source["src"];
+	        this.dst = source["dst"];
+	    }
+	}
+	export class AddonManifest {
+	    name: string;
+	    id: string;
+	    version: string;
+	    author: string;
+	    description: string;
+	    category: string;
+	    tags: string[];
+	    files: FileEntry[];
+	    conflicts: string[];
+	    requires: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AddonManifest(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.id = source["id"];
+	        this.version = source["version"];
+	        this.author = source["author"];
+	        this.description = source["description"];
+	        this.category = source["category"];
+	        this.tags = source["tags"];
+	        this.files = this.convertValues(source["files"], FileEntry);
+	        this.conflicts = source["conflicts"];
+	        this.requires = source["requires"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class AddonUpdate {
+	    addonId: string;
+	    currentVersion: string;
+	    latestVersion: string;
+	    repoUrl: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AddonUpdate(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.addonId = source["addonId"];
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.repoUrl = source["repoUrl"];
+	    }
+	}
+	
+	export class InstalledAddon {
+	    id: string;
+	    repoUrl: string;
+	    version: string;
+	    enabled: boolean;
+	    // Go type: time
+	    installedAt: any;
+	    manifest: AddonManifest;
+	
+	    static createFrom(source: any = {}) {
+	        return new InstalledAddon(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.repoUrl = source["repoUrl"];
+	        this.version = source["version"];
+	        this.enabled = source["enabled"];
+	        this.installedAt = this.convertValues(source["installedAt"], null);
+	        this.manifest = this.convertValues(source["manifest"], AddonManifest);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace config {
 	
 	export class ServerEndpoint {

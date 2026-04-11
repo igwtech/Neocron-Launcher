@@ -2,6 +2,13 @@
 
 Cross-platform game launcher and installer for [Neocron 2](https://en.wikipedia.org/wiki/Neocron), built with Go and [Wails](https://wails.io). Designed for use with community server emulators since the official servers are no longer maintained.
 
+## Why
+I fell in love with Neocron during the open beta in the early 2000s and have followed the project ever since. As the game transitioned to community-run servers, I found myself in a cycle of "returning to the city" every few months, only to be met with the same technical hurdles:
+ - **The Wine Struggle**: Getting the original .NET launcher to play nice with Wine/Proton required constant manual overrides and prefix tweaking.
+ - **The "Context Switch" Tax**: Every time life or work forced me to take a break, returning to the game meant hours of re-learning how to fix my broken installation.
+ - **Fragmentatio**n: Managing patches, high-resolution texture packs, and server-specific configurations was a tedious, manual process.
+I built this launcher to solve these problems once and for all. It provides a single-binary, zero-config solution that handles the heavy lifting—from Proton prefix management to delta updates and custom patching—so we can spend less time in the terminal and more time in Neocron.
+
 ## Features
 
 - **Game installer & updater** — Downloads the full game from the Neocron CDN, verifies files via MD5 hashes, and performs delta updates (only changed files). Supports concurrent downloads, automatic retry, and resume after interruption.

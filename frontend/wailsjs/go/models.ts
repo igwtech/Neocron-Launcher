@@ -25,11 +25,12 @@ export namespace addon {
 	    files: FileEntry[];
 	    conflicts: string[];
 	    requires: string[];
-	
+	    wineDllOverrides?: string[];
+
 	    static createFrom(source: any = {}) {
 	        return new AddonManifest(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -42,6 +43,7 @@ export namespace addon {
 	        this.files = this.convertValues(source["files"], FileEntry);
 	        this.conflicts = source["conflicts"];
 	        this.requires = source["requires"];
+	        this.wineDllOverrides = source["wineDllOverrides"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -89,11 +91,12 @@ export namespace addon {
 	    // Go type: time
 	    installedAt: any;
 	    manifest: AddonManifest;
-	
+	    priority: number;
+
 	    static createFrom(source: any = {}) {
 	        return new InstalledAddon(source);
 	    }
-	
+
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
@@ -102,6 +105,7 @@ export namespace addon {
 	        this.enabled = source["enabled"];
 	        this.installedAt = this.convertValues(source["installedAt"], null);
 	        this.manifest = this.convertValues(source["manifest"], AddonManifest);
+	        this.priority = source["priority"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

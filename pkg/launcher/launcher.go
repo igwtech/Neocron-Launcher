@@ -42,8 +42,11 @@ func (l *Launcher) GetStatus() GameStatus {
 }
 
 // Launch starts the game with the given configuration.
+// extraDLLOverrides is a list of DLL basenames (no extension) that should be
+// set to native,builtin via WINEDLLOVERRIDES — typically supplied by the addon
+// manager from enabled wrapper addons (dgVoodoo2, ReShade, etc.).
 // onOutput receives stdout/stderr lines. onExit is called when the process ends.
-func (l *Launcher) Launch(cfg *config.Config, onOutput func(string), onExit func(GameStatus)) error {
+func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, onOutput func(string), onExit func(GameStatus)) error {
 	l.mu.Lock()
 	if l.status.Running {
 		l.mu.Unlock()
@@ -81,8 +84,9 @@ func (l *Launcher) Launch(cfg *config.Config, onOutput func(string), onExit func
 
 		prefixMgr := proton.NewPrefixManager(cfg.PrefixPath)
 		envOpts := proton.LaunchEnvOpts{
-			EnableDXVK:     cfg.EnableDXVK,
-			EnableMangoHud: cfg.EnableMangoHud,
+			EnableDXVK:        cfg.EnableDXVK,
+			EnableMangoHud:    cfg.EnableMangoHud,
+			ExtraDLLOverrides: extraDLLOverrides,
 		}
 		env = prefixMgr.BuildGameEnv(protonPath, envOpts)
 
@@ -106,7 +110,7 @@ func (l *Launcher) Launch(cfg *config.Config, onOutput func(string), onExit func
 		env = os.Environ()
 		env = append(env,
 			"WINEDEBUG=-all,err+module",
-			"WINEDLLOVERRIDES=quartz=n,b",
+			proton.ComposeDLLOverrides(extraDLLOverrides),
 		)
 		if cfg.PrefixPath != "" {
 			env = append(env, fmt.Sprintf("WINEPREFIX=%s", cfg.PrefixPath))
@@ -293,6 +297,8 @@ func updateIniKey(path, key, value string) error {
 }
 
 // RunSysConfig launches the game's graphics configuration dialog via Wine.
+// The sysconfig dialog must run against the unwrapped DirectX, so wrapper DLL
+// overrides are intentionally not applied here.
 func RunSysConfig(cfg *config.Config) error {
 	exePath := filepath.Join(cfg.InstallDir, cfg.GameExe)
 
@@ -326,7 +332,7 @@ func RunSysConfig(cfg *config.Config) error {
 		env := os.Environ()
 		env = append(env,
 			"WINEDEBUG=-all,err+module",
-			"WINEDLLOVERRIDES=quartz=n,b",
+			proton.ComposeDLLOverrides(nil),
 		)
 		if cfg.PrefixPath != "" {
 			env = append(env, fmt.Sprintf("WINEPREFIX=%s", cfg.PrefixPath))

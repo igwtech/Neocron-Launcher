@@ -20,12 +20,35 @@ type AddonManifest struct {
 	Files       []FileEntry `json:"files"`
 	Conflicts   []string    `json:"conflicts"`
 	Requires    []string    `json:"requires"`
+	// WineDLLOverrides lists DLL basenames (no extension) that should be set to
+	// "native,builtin" in WINEDLLOVERRIDES when this addon is enabled. Used by
+	// wrapper addons like dgVoodoo2 (d3d8, d3dimm, ddraw) and ReShade (dxgi, d3d9).
+	WineDLLOverrides []string `json:"wineDllOverrides,omitempty"`
+	// Fetch declares external archives the launcher should download at install
+	// time and extract into the addon cache. Lets addons reference upstream
+	// binaries (dgVoodoo2 from GitHub releases, etc.) without redistributing
+	// them in the addon repo itself.
+	Fetch []FetchEntry `json:"fetch,omitempty"`
+	// Expects lists install-dir-relative paths that the addon needs the user
+	// to provide manually (e.g. ReShade's dxgi.dll, which upstream asks not
+	// to be redistributed). The launcher checks these after install + on
+	// every refresh, surfacing missing paths as a warning badge.
+	Expects []string `json:"expects,omitempty"`
 }
 
 // FileEntry maps source paths in the addon repo to destination paths in the game dir.
 type FileEntry struct {
 	Src string `json:"src"`
 	Dst string `json:"dst"`
+}
+
+// FetchEntry declares an external download. The launcher fetches `From` at
+// install time, extracts per `Extract`, and copies the listed `Files` into
+// the addon cache alongside files mapped from the repo itself.
+type FetchEntry struct {
+	From    string      `json:"from"`              // URL — http(s) only, follows redirects
+	Extract string      `json:"extract,omitempty"` // "zip", "tar.gz", or "" for raw single-file
+	Files   []FileEntry `json:"files"`             // src is path inside extracted archive (or "" for raw)
 }
 
 // InstalledAddon tracks an addon that has been installed.
@@ -36,6 +59,10 @@ type InstalledAddon struct {
 	Enabled     bool          `json:"enabled"`
 	InstalledAt time.Time     `json:"installedAt"`
 	Manifest    AddonManifest `json:"manifest"`
+	// Priority controls apply order: lower priorities apply first, higher
+	// priorities overwrite when two addons declare the same destination path.
+	// Default 0; ties broken by InstalledAt ascending.
+	Priority int `json:"priority"`
 }
 
 // AddonUpdate describes an available update for an installed addon.
@@ -53,9 +80,22 @@ type DownloadProgress struct {
 	Message string  `json:"message"`
 }
 
+// Pristine snapshot states: a path is "exists" if it had a game file before
+// any addon touched it, "absent" if no game file existed.
+const (
+	PristineExists = "exists"
+	PristineAbsent = "absent"
+)
+
 // state is the persisted addon state.
 type state struct {
 	Addons []InstalledAddon `json:"addons"`
+	// PristineSnapshots records, for each install-relative path that any addon
+	// has ever declared, whether the original (pre-addon) game file existed.
+	// "exists" means a copy lives in pristinePoolDir; "absent" means restoring
+	// pristine = delete the file. Recorded once at first-install, never
+	// overwritten — that's what makes layered restore correct.
+	PristineSnapshots map[string]string `json:"pristineSnapshots,omitempty"`
 }
 
 // DefaultDataDir returns the base directory for addon data.
@@ -111,6 +151,9 @@ func addonFilesDir(dataDir, addonID string) string {
 	return filepath.Join(addonDir(dataDir, addonID), "files")
 }
 
-func addonBackupDir(dataDir, addonID string) string {
-	return filepath.Join(addonDir(dataDir, addonID), "backup")
+// pristinePoolDir is the shared per-launcher directory holding pristine
+// (pre-any-addon) snapshots of game files. Layered backup correctness depends
+// on this being shared across addons rather than per-addon.
+func pristinePoolDir(dataDir string) string {
+	return filepath.Join(dataDir, "_pristine")
 }

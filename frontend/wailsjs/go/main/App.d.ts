@@ -86,6 +86,12 @@ export function StartInstall():Promise<void>;
 
 export function StartUpdate():Promise<void>;
 
+export function ReorderAddons(arg1:Array<string>):Promise<void>;
+
+export function SetAddonPriority(arg1:string,arg2:number):Promise<void>;
+
+export function GetMissingExpected():Promise<{[key: string]: Array<string>}>;
+
 export function UninstallAddon(arg1:string):Promise<void>;
 
 export function UpdateAddon(arg1:string):Promise<void>;

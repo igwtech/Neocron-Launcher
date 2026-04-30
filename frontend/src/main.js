@@ -32,6 +32,8 @@ import {
     DisableAddon,
     UpdateAddon,
     CheckAddonUpdates,
+    ReorderAddons,
+    GetMissingExpected,
     APILogin,
     APILogout,
     APIIsSessionValid,
@@ -663,30 +665,87 @@ function openAddServerModal() {
 async function refreshAddons() {
     const list = document.getElementById('addon-list');
     try {
-        const addons = await GetInstalledAddons();
+        const [addons, missingMap] = await Promise.all([
+            GetInstalledAddons(),
+            GetMissingExpected().catch(() => ({})),
+        ]);
         if (!addons || addons.length === 0) {
             list.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; padding: 12px; text-align: center;">No addons installed. Paste a GitHub repo URL above to install one.</div>';
             return;
         }
+        // Render in priority order (lower = applies first; higher = wins).
+        // Tie-break by installedAt for stability.
+        const sorted = addons.slice().sort((a, b) => {
+            const dp = (a.priority || 0) - (b.priority || 0);
+            if (dp !== 0) return dp;
+            return (a.installedAt || '').localeCompare(b.installedAt || '');
+        });
         list.innerHTML = '';
-        addons.forEach(a => {
+        sorted.forEach((a, idx) => {
             const card = document.createElement('div');
             card.className = 'addon-card' + (a.enabled ? '' : ' disabled');
+            const overrides = (a.manifest.wineDllOverrides || []).filter(Boolean);
+            const wrapperBadge = overrides.length
+                ? `<span class="category-badge wrappers" title="Sets WINEDLLOVERRIDES at launch: ${esc(overrides.join(', '))}">wraps ${esc(overrides.join(' + '))}</span>`
+                : '';
+            const requires = (a.manifest.requires || []).filter(Boolean);
+            const conflicts = (a.manifest.conflicts || []).filter(Boolean);
+            const requiresBadge = requires.length
+                ? `<span class="category-badge requires" title="Requires: ${esc(requires.join(', '))}">needs ${esc(requires.join(', '))}</span>`
+                : '';
+            const conflictsBadge = conflicts.length
+                ? `<span class="category-badge conflicts" title="Conflicts with: ${esc(conflicts.join(', '))}">conflicts ${esc(conflicts.join(', '))}</span>`
+                : '';
+            const missing = (missingMap && missingMap[a.id]) || [];
+            const missingBadge = missing.length
+                ? `<span class="category-badge missing" title="Manual install incomplete — provide in game dir: ${esc(missing.join(', '))}">${missing.length} file(s) missing</span>`
+                : '';
+            const isFirst = idx === 0;
+            const isLast = idx === sorted.length - 1;
             card.innerHTML = `
                 <div class="addon-info">
                     <div class="addon-name">
                         ${esc(a.manifest.name)}
                         <span class="category-badge ${a.manifest.category || 'other'}">${esc(a.manifest.category || 'other')}</span>
+                        ${wrapperBadge}
+                        ${requiresBadge}
+                        ${conflictsBadge}
+                        ${missingBadge}
                     </div>
-                    <div class="addon-meta">v${esc(a.version)} by ${esc(a.manifest.author || 'unknown')}</div>
+                    <div class="addon-meta">v${esc(a.version)} by ${esc(a.manifest.author || 'unknown')} · priority ${a.priority || 0}</div>
                     <div class="addon-desc">${esc(a.manifest.description || '')}</div>
                 </div>
                 <div class="addon-actions">
+                    <div class="addon-reorder">
+                        <button class="addon-move-btn" data-id="${esc(a.id)}" data-dir="up" title="Lower priority (applies earlier; loses conflicts)" ${isFirst ? 'disabled' : ''}>&uarr;</button>
+                        <button class="addon-move-btn" data-id="${esc(a.id)}" data-dir="down" title="Higher priority (applies later; wins conflicts)" ${isLast ? 'disabled' : ''}>&darr;</button>
+                    </div>
                     <div class="addon-toggle ${a.enabled ? 'on' : ''}" data-id="${esc(a.id)}" title="${a.enabled ? 'Disable' : 'Enable'}"></div>
                     <button class="btn btn-secondary addon-update-btn" data-id="${esc(a.id)}" style="padding:4px 8px;font-size:9px;">Update</button>
                     <button class="btn-remove addon-remove-btn" data-id="${esc(a.id)}" title="Uninstall">&times;</button>
                 </div>
             `;
+
+            card.querySelectorAll('.addon-move-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const id = e.currentTarget.dataset.id;
+                    const dir = e.currentTarget.dataset.dir;
+                    const newOrder = sorted.map(x => x.id);
+                    const i = newOrder.indexOf(id);
+                    if (i < 0) return;
+                    if (dir === 'up' && i > 0) {
+                        [newOrder[i - 1], newOrder[i]] = [newOrder[i], newOrder[i - 1]];
+                    } else if (dir === 'down' && i < newOrder.length - 1) {
+                        [newOrder[i], newOrder[i + 1]] = [newOrder[i + 1], newOrder[i]];
+                    } else {
+                        return;
+                    }
+                    try {
+                        await ReorderAddons(newOrder);
+                        refreshAddons();
+                    } catch (err) { alert('Reorder failed: ' + err); }
+                });
+            });
 
             card.querySelector('.addon-toggle').addEventListener('click', async (e) => {
                 const id = e.currentTarget.dataset.id;

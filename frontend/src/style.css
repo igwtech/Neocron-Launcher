@@ -576,6 +576,42 @@ footer {
 .category-badge.translation { border-color: #3498db; color: #5dade2; }
 .category-badge.effects { border-color: #e74c3c; color: #ec7063; }
 .category-badge.other { border-color: var(--text-muted); color: var(--text-secondary); }
+.category-badge.wrappers { border-color: #f1c40f; color: #f4d03f; background: rgba(241, 196, 15, 0.08); }
+.category-badge.requires { border-color: #2ecc71; color: #58d68d; background: rgba(46, 204, 113, 0.08); }
+.category-badge.conflicts { border-color: #e74c3c; color: #ec7063; background: rgba(231, 76, 60, 0.08); }
+.category-badge.missing { border-color: #e67e22; color: #f0a050; background: rgba(230, 126, 34, 0.12); animation: missing-pulse 2s ease-in-out infinite; }
+@keyframes missing-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+}
+
+.addon-reorder {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-right: 4px;
+}
+.addon-move-btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    cursor: pointer;
+    width: 18px;
+    height: 16px;
+    font-size: 10px;
+    padding: 0;
+    line-height: 1;
+    border-radius: 2px;
+    font-family: var(--font-mono);
+}
+.addon-move-btn:not(:disabled):hover {
+    border-color: var(--accent);
+    color: var(--accent);
+}
+.addon-move-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
 
 .addon-actions {
     display: flex;

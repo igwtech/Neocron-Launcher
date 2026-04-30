@@ -142,7 +142,7 @@ func (pm *PrefixManager) setupViaProton(protonScript, buildPath string, onOutput
 
 	emit("Initializing prefix via Proton...")
 
-	env := pm.buildProtonEnv(buildPath)
+	env := pm.buildProtonEnv(buildPath, nil)
 
 	cmd := exec.Command("python3", protonScript, "run", "cmd", "/c", "echo", "prefix initialized")
 	cmd.Env = env
@@ -328,7 +328,9 @@ func (pm *PrefixManager) downloadWinetricks() (string, error) {
 }
 
 // buildProtonEnv constructs the environment variables for running a game via Proton.
-func (pm *PrefixManager) buildProtonEnv(protonBuildPath string) []string {
+// extraOverrides is a list of DLL basenames (e.g. "d3d8", "dxgi") to set to
+// native,builtin in addition to the baseline quartz override.
+func (pm *PrefixManager) buildProtonEnv(protonBuildPath string, extraOverrides []string) []string {
 	env := os.Environ()
 
 	var filtered []string
@@ -347,7 +349,7 @@ func (pm *PrefixManager) buildProtonEnv(protonBuildPath string) []string {
 		fmt.Sprintf("STEAM_COMPAT_DATA_PATH=%s", pm.PrefixPath),
 		fmt.Sprintf("STEAM_COMPAT_CLIENT_INSTALL_PATH=%s", protonBuildPath),
 		"WINEDEBUG=-all,err+module",
-		"WINEDLLOVERRIDES=quartz=n,b",
+		ComposeDLLOverrides(extraOverrides),
 	)
 
 	return filtered
@@ -355,7 +357,7 @@ func (pm *PrefixManager) buildProtonEnv(protonBuildPath string) []string {
 
 // BuildGameEnv returns the environment variables needed to launch a game through Proton.
 func (pm *PrefixManager) BuildGameEnv(protonBuildPath string, opts LaunchEnvOpts) []string {
-	env := pm.buildProtonEnv(protonBuildPath)
+	env := pm.buildProtonEnv(protonBuildPath, opts.ExtraDLLOverrides)
 
 	if opts.EnableDXVK {
 		env = append(env, "PROTON_USE_WINED3D=0")
@@ -374,4 +376,25 @@ func (pm *PrefixManager) BuildGameEnv(protonBuildPath string, opts LaunchEnvOpts
 type LaunchEnvOpts struct {
 	EnableDXVK     bool
 	EnableMangoHud bool
+	// ExtraDLLOverrides are DLL basenames (no extension, lowercase) that should
+	// be set to native,builtin. The baseline "quartz" override is always added.
+	ExtraDLLOverrides []string
+}
+
+// ComposeDLLOverrides builds a WINEDLLOVERRIDES env-var string of the form
+// "WINEDLLOVERRIDES=quartz=n,b;dll1=n,b;dll2=n,b". The baseline "quartz"
+// override (Neocron requires native quartz for video playback) is always
+// included; extra basenames are appended de-duplicated and lowercased.
+func ComposeDLLOverrides(extra []string) string {
+	seen := map[string]bool{"quartz": true}
+	parts := []string{"quartz=n,b"}
+	for _, dll := range extra {
+		key := strings.ToLower(strings.TrimSpace(dll))
+		if key == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		parts = append(parts, key+"=n,b")
+	}
+	return "WINEDLLOVERRIDES=" + strings.Join(parts, ";")
 }

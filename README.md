@@ -17,6 +17,7 @@ I built this launcher to solve these problems once and for all. It provides a si
 - **SOAP API client** — Connects to Neocron's management APIs (SessionManagement, LauncherInterface, PublicInterface) for authentication, application discovery, and server endpoint retrieval.
 - **PAK archive support** — Reads and writes the Neocron PAK archive format (single-file and multi-file variants).
 - **Runtime toggles** — DXVK, GameMode (Linux), MangoHud overlay.
+- **Addons** — GitHub-hosted file packs (texture upgrades, audio mods, graphics wrappers) installed by repo URL. Wrapper addons can declare DLL overrides that the launcher composes into `WINEDLLOVERRIDES` automatically.
 - **Game log viewer** — Streams stdout/stderr from the running game process.
 
 ## Screenshots
@@ -102,7 +103,10 @@ This starts a live-reloading development server with hot reload for frontend cha
 │   ├── neocronapi/client.go  # SOAP API client (session, launcher, public)
 │   ├── proton/
 │   │   ├── manager.go        # Proton build detection & GE-Proton downloader
-│   │   └── prefix.go         # Wine/Proton prefix management
+│   │   └── prefix.go         # Wine/Proton prefix management + WINEDLLOVERRIDES composer
+│   ├── addon/
+│   │   ├── manager.go        # GitHub-tarball addon installer + WINEDLLOVERRIDES contributor
+│   │   └── state.go          # addon.json manifest schema + persisted state
 │   └── launcher/launcher.go  # Platform-aware game process launcher
 ├── frontend/
 │   ├── index.html            # UI shell
@@ -127,6 +131,38 @@ Config is stored at `~/.config/neocron-launcher/config.json` and includes:
 | `enableDxvk` | `true` | Use DXVK for DirectX translation |
 | `enableGameMode` | `true` (Linux) | Use Feral GameMode |
 | `enableMangoHud` | `false` | Show MangoHud overlay |
+
+## Addons
+
+Addons are GitHub repos containing an `addon.json` manifest plus the files to drop into the game install directory. Install one by pasting its repo URL into the Addons tab.
+
+`addon.json` schema:
+
+```json
+{
+  "id": "neocron-graphics-pack",
+  "name": "Enhanced Graphics (dgVoodoo2 + ReShade)",
+  "version": "0.1.0",
+  "category": "graphics",
+  "files": [
+    { "src": "D3D8.dll",  "dst": "D3D8.dll" },
+    { "src": "dxgi.dll",  "dst": "dxgi.dll" }
+  ],
+  "wineDllOverrides": ["d3d8", "dxgi"],
+  "requires":  ["some-other-addon-id"],
+  "conflicts": ["incompatible-addon-id"]
+}
+```
+
+**Priority and load order.** When two addons declare the same destination path, the higher-priority addon wins. Newly installed addons go to the top of the stack; reorder with the up/down arrows in the Addons tab. The launcher uses a shared pristine-snapshot pool, so disabling the top of a stack restores the *next layer down* rather than the original game file — the same way Skyrim mod managers handle layered overrides.
+
+**Dependencies and conflicts.** `requires` is enforced at install + enable time (transitively, with cycle detection — auto-enables missing deps). `conflicts` refuses enable when a conflicting addon is already enabled. Disabling or uninstalling an addon that other enabled addons require is refused.
+
+**Wine DLL overrides.** When enabled, `wineDllOverrides` entries are composed into a single `WINEDLLOVERRIDES=quartz=n,b;d3d8=n,b;dxgi=n,b...` env var at game launch — pulled from the union across enabled addons.
+
+**CDN-update safety.** Update flow is two-phase: pre-update unstamps all addon files (install dir = pristine), CDN updater runs, post-update refreshes the pristine pool from the now-updated install dir, then re-stamps the enabled stack in priority order. Wrapper DLLs survive game patches.
+
+The first-party Enhanced Graphics pack (dgVoodoo2 DX8→D3D11 wrapper + ReShade post-processing) lives at <https://github.com/igwtech/neocron-graphics-pack>. Paste that URL into the Addons tab to install — once the upstream binaries are bundled, this is the recommended graphics setup for Linux/Proton.
 
 ## Releases
 

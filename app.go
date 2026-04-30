@@ -146,6 +146,7 @@ func (a *App) CheckForUpdate() updater.UpdateCheckResult {
 
 func (a *App) StartInstall() error {
 	go func() {
+		a.unstampAddonsBeforeUpdate()
 		var lastProgress updater.Progress
 		err := a.updater.Install(func(p updater.Progress) {
 			lastProgress = p
@@ -153,15 +154,18 @@ func (a *App) StartInstall() error {
 		})
 		if err != nil {
 			wailsRuntime.EventsEmit(a.ctx, "update:error", err.Error())
-		} else {
-			wailsRuntime.EventsEmit(a.ctx, "update:complete", lastProgress)
+			a.recoverAddonsAfterFailedUpdate()
+			return
 		}
+		a.refreshAddonsAfterUpdate()
+		wailsRuntime.EventsEmit(a.ctx, "update:complete", lastProgress)
 	}()
 	return nil
 }
 
 func (a *App) StartUpdate() error {
 	go func() {
+		a.unstampAddonsBeforeUpdate()
 		var lastProgress updater.Progress
 		err := a.updater.Update(func(p updater.Progress) {
 			lastProgress = p
@@ -169,11 +173,47 @@ func (a *App) StartUpdate() error {
 		})
 		if err != nil {
 			wailsRuntime.EventsEmit(a.ctx, "update:error", err.Error())
-		} else {
-			wailsRuntime.EventsEmit(a.ctx, "update:complete", lastProgress)
+			a.recoverAddonsAfterFailedUpdate()
+			return
 		}
+		a.refreshAddonsAfterUpdate()
+		wailsRuntime.EventsEmit(a.ctx, "update:complete", lastProgress)
 	}()
 	return nil
+}
+
+// unstampAddonsBeforeUpdate restores all addon-touched paths to pristine so
+// the CDN updater can overwrite them cleanly. No state mutation.
+func (a *App) unstampAddonsBeforeUpdate() {
+	if a.addonMgr == nil {
+		return
+	}
+	if err := a.addonMgr.PrepareForUpdate(); err != nil {
+		wailsRuntime.EventsEmit(a.ctx, "addon:reapply:error", "pre-update unstamp: "+err.Error())
+	}
+}
+
+// refreshAddonsAfterUpdate refreshes the pristine pool from the now-updated
+// install dir, then re-stamps the enabled addon stack.
+func (a *App) refreshAddonsAfterUpdate() {
+	if a.addonMgr == nil {
+		return
+	}
+	if err := a.addonMgr.FinishAfterUpdate(); err != nil {
+		wailsRuntime.EventsEmit(a.ctx, "addon:reapply:error", "post-update refresh: "+err.Error())
+	}
+}
+
+// recoverAddonsAfterFailedUpdate re-stamps the enabled stack on top of a
+// partially-updated install dir. Pristine is NOT refreshed — the user should
+// re-run update before relying on disable/uninstall.
+func (a *App) recoverAddonsAfterFailedUpdate() {
+	if a.addonMgr == nil {
+		return
+	}
+	if err := a.addonMgr.ReapplyEnabled(); err != nil {
+		wailsRuntime.EventsEmit(a.ctx, "addon:reapply:error", "recovery restamp: "+err.Error())
+	}
 }
 
 func (a *App) CancelUpdate() {
@@ -297,7 +337,8 @@ func (a *App) SetupPrefix() error {
 // --- Game launch ---
 
 func (a *App) LaunchGame() error {
-	return a.gameLauncher.Launch(a.cfg,
+	overrides := a.addonMgr.EnabledDLLOverrides()
+	return a.gameLauncher.Launch(a.cfg, overrides,
 		func(line string) {
 			wailsRuntime.EventsEmit(a.ctx, "game:output", line)
 		},
@@ -365,6 +406,25 @@ func (a *App) UpdateAddon(addonID string) error {
 
 func (a *App) CheckAddonUpdates() ([]addon.AddonUpdate, error) {
 	return a.addonMgr.CheckUpdates()
+}
+
+// ReorderAddons assigns priorities 0..N-1 to addons in the given order. Lower
+// priority applies first; higher wins file conflicts. Triggers a stack
+// recompute so the install dir reflects the new order immediately.
+func (a *App) ReorderAddons(orderedIDs []string) error {
+	return a.addonMgr.Reorder(orderedIDs)
+}
+
+// SetAddonPriority changes a single addon's priority and rebuilds the stack.
+func (a *App) SetAddonPriority(addonID string, priority int) error {
+	return a.addonMgr.SetPriority(addonID, priority)
+}
+
+// GetMissingExpected returns addon ID -> list of install-dir paths that the
+// addon's manifest declared in 'expects' but aren't present. Live-checked
+// each call so a user dropping a file in clears the warning on next refresh.
+func (a *App) GetMissingExpected() map[string][]string {
+	return a.addonMgr.MissingExpected()
 }
 
 func (a *App) RunSysConfig() error {

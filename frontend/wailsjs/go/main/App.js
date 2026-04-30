@@ -158,6 +158,18 @@ export function StartUpdate() {
   return window['go']['main']['App']['StartUpdate']();
 }
 
+export function ReorderAddons(arg1) {
+  return window['go']['main']['App']['ReorderAddons'](arg1);
+}
+
+export function SetAddonPriority(arg1, arg2) {
+  return window['go']['main']['App']['SetAddonPriority'](arg1, arg2);
+}
+
+export function GetMissingExpected() {
+  return window['go']['main']['App']['GetMissingExpected']();
+}
+
 export function UninstallAddon(arg1) {
   return window['go']['main']['App']['UninstallAddon'](arg1);
 }

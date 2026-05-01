@@ -369,6 +369,12 @@ func (pm *PrefixManager) BuildGameEnv(protonBuildPath string, opts LaunchEnvOpts
 		env = append(env, "MANGOHUD=1")
 	}
 
+	// Addon-supplied env vars (e.g. ENABLE_VKBASALT=1, VKBASALT_CONFIG_FILE=...).
+	// Last-write wins, so addon vars override anything inherited from os.Environ().
+	for k, v := range opts.ExtraEnv {
+		env = append(env, k+"="+v)
+	}
+
 	return env
 }
 
@@ -379,6 +385,11 @@ type LaunchEnvOpts struct {
 	// ExtraDLLOverrides are DLL basenames (no extension, lowercase) that should
 	// be set to native,builtin. The baseline "quartz" override is always added.
 	ExtraDLLOverrides []string
+	// ExtraEnv are additional KEY=VALUE-style entries appended to the
+	// process environment. Keys already present in os.Environ() are
+	// overwritten by entries here. Sourced from enabled addons'
+	// AddonManifest.EnvVars at launch time.
+	ExtraEnv map[string]string
 }
 
 // ComposeDLLOverrides builds a WINEDLLOVERRIDES env-var string of the form

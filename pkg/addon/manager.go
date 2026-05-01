@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -193,6 +194,10 @@ func (m *Manager) InstallFromRepo(repoURL string, onProgress func(DownloadProgre
 	totalEntries := len(manifest.Files)
 	for idx, fe := range manifest.Files {
 		pct := 60.0 + (float64(idx)/float64(totalEntries+1))*10.0
+		if !platformMatches(fe.OS) {
+			m.log("Skipping file [%d/%d] %s — not for %s", idx+1, totalEntries, fe.Src, runtimeGOOS())
+			continue
+		}
 		srcPath := filepath.Join(repoRoot, filepath.FromSlash(fe.Src))
 		cacheDst := filepath.Join(cacheDir, filepath.FromSlash(fe.Dst))
 		m.log("Caching [%d/%d]: %s -> %s", idx+1, totalEntries, srcPath, cacheDst)
@@ -213,6 +218,10 @@ func (m *Manager) InstallFromRepo(repoURL string, onProgress func(DownloadProgre
 	// files. Lets addons reference binaries without redistributing them.
 	for fIdx, entry := range manifest.Fetch {
 		pct := 70.0 + (float64(fIdx)/float64(len(manifest.Fetch)+1))*10.0
+		if !platformMatches(entry.OS) {
+			m.log("Skipping fetch [%d] %s — not for %s", fIdx+1, entry.From, runtimeGOOS())
+			continue
+		}
 		report(DownloadProgress{Status: "installing", Percent: pct, Message: fmt.Sprintf("Fetching %s...", entry.From)})
 		if err := m.stageFetched(entry, cacheDir, func(msg string) {
 			report(DownloadProgress{Status: "installing", Percent: pct, Message: msg})
@@ -865,8 +874,8 @@ func validateManifest(m AddonManifest) error {
 	if strings.TrimSpace(m.Version) == "" {
 		return fmt.Errorf("addon.json: 'version' is required")
 	}
-	if len(m.Files) == 0 && len(m.WineDLLOverrides) == 0 && len(m.Fetch) == 0 {
-		return fmt.Errorf("addon.json: must declare at least one entry in 'files', 'fetch', or 'wineDllOverrides'")
+	if len(m.Files) == 0 && len(m.WineDLLOverrides) == 0 && len(m.Fetch) == 0 && len(m.EnvVars) == 0 {
+		return fmt.Errorf("addon.json: must declare at least one entry in 'files', 'fetch', 'wineDllOverrides', or 'envVars'")
 	}
 	for _, req := range m.Requires {
 		if req == m.ID {
@@ -925,7 +934,28 @@ func validateManifest(m AddonManifest) error {
 			}
 		}
 	}
+	for platform, vars := range m.EnvVars {
+		if !validOS(platform) {
+			return fmt.Errorf("addon.json: 'envVars' platform key %q must be one of linux, darwin, windows", platform)
+		}
+		for k := range vars {
+			if strings.TrimSpace(k) == "" {
+				return fmt.Errorf("addon.json: 'envVars[%s]' has empty variable name", platform)
+			}
+		}
+	}
 	return nil
+}
+
+// validOS rejects platform keys we don't know how to handle. We list the
+// three runtime.GOOS values the launcher currently builds for; freebsd /
+// openbsd / etc. are unsupported intentionally.
+func validOS(s string) bool {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "linux", "darwin", "windows":
+		return true
+	}
+	return false
 }
 
 func firstDuplicate(xs []string) string {
@@ -1203,6 +1233,62 @@ func downloadAndExtractTarball(url, destDir string, onProgress func(float64, str
 		onProgress(55, fmt.Sprintf("Extracted %d files", fileCount))
 	}
 	return nil
+}
+
+// platformMatches reports whether the current OS is allowed by the given
+// list. Empty list means "applies on every platform" (the default for
+// addons authored before the os field existed).
+func platformMatches(allowed []string) bool {
+	if len(allowed) == 0 {
+		return true
+	}
+	cur := runtimeGOOS()
+	for _, os := range allowed {
+		if strings.EqualFold(strings.TrimSpace(os), cur) {
+			return true
+		}
+	}
+	return false
+}
+
+// runtimeGOOS is a thin indirection so tests can stub it. We don't bother
+// with sync.atomic because the only writer is test setup.
+var goosOverride string
+
+func runtimeGOOS() string {
+	if goosOverride != "" {
+		return goosOverride
+	}
+	return runtime.GOOS
+}
+
+// EnabledEnvVars returns the merged set of environment variables that
+// enabled addons want set on the game process for the current platform,
+// after expanding the "${INSTALL_DIR}" template against m.InstallDir.
+//
+// When two enabled addons declare the same key, the higher-priority addon
+// wins (matching how files stack). Same priority — order of installation
+// breaks the tie via enabledInOrder().
+func (m *Manager) EnabledEnvVars() (map[string]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	s, err := loadState(m.DataDir)
+	if err != nil {
+		return nil, err
+	}
+	cur := runtimeGOOS()
+	out := map[string]string{}
+	for _, a := range enabledInOrder(s.Addons) {
+		platVars, ok := a.Manifest.EnvVars[cur]
+		if !ok {
+			continue
+		}
+		for k, v := range platVars {
+			out[k] = strings.ReplaceAll(v, "${INSTALL_DIR}", m.InstallDir)
+		}
+	}
+	return out, nil
 }
 
 func copyTree(src, dst string) error {

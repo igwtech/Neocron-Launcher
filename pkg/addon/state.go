@@ -34,21 +34,32 @@ type AddonManifest struct {
 	// to be redistributed). The launcher checks these after install + on
 	// every refresh, surfacing missing paths as a warning badge.
 	Expects []string `json:"expects,omitempty"`
+	// EnvVars sets extra environment variables on the game process, keyed by
+	// runtime.GOOS. Lets addons activate Vulkan layers (vkBasalt), tweak
+	// engine envs, etc. without launcher code changes. Values may include
+	// the literal "${INSTALL_DIR}" which is expanded to the game install
+	// directory at launch time. Outer key e.g. "linux", "darwin", "windows".
+	EnvVars map[string]map[string]string `json:"envVars,omitempty"`
 }
 
 // FileEntry maps source paths in the addon repo to destination paths in the game dir.
+// OS, when non-empty, restricts staging to those runtime.GOOS values; an empty
+// list means the entry applies on every platform (current default behavior).
 type FileEntry struct {
-	Src string `json:"src"`
-	Dst string `json:"dst"`
+	Src string   `json:"src"`
+	Dst string   `json:"dst"`
+	OS  []string `json:"os,omitempty"`
 }
 
 // FetchEntry declares an external download. The launcher fetches `From` at
 // install time, extracts per `Extract`, and copies the listed `Files` into
 // the addon cache alongside files mapped from the repo itself.
+// OS restricts the fetch to the listed platforms (empty = all).
 type FetchEntry struct {
 	From    string      `json:"from"`              // URL — http(s) only, follows redirects
 	Extract string      `json:"extract,omitempty"` // "zip", "tar.gz", or "" for raw single-file
 	Files   []FileEntry `json:"files"`             // src is path inside extracted archive (or "" for raw)
+	OS      []string    `json:"os,omitempty"`
 }
 
 // InstalledAddon tracks an addon that has been installed.

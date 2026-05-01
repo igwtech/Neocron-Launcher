@@ -349,7 +349,12 @@ func (a *App) SetupPrefix() error {
 
 func (a *App) LaunchGame() error {
 	overrides := a.addonMgr.EnabledDLLOverrides()
-	return a.gameLauncher.Launch(a.cfg, overrides,
+	envVars, err := a.addonMgr.EnabledEnvVars()
+	if err != nil {
+		fmt.Println("LaunchGame: could not load addon env vars:", err)
+		envVars = nil
+	}
+	return a.gameLauncher.Launch(a.cfg, overrides, envVars,
 		func(line string) {
 			wailsRuntime.EventsEmit(a.ctx, "game:output", line)
 		},

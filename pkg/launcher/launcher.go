@@ -45,8 +45,11 @@ func (l *Launcher) GetStatus() GameStatus {
 // extraDLLOverrides is a list of DLL basenames (no extension) that should be
 // set to native,builtin via WINEDLLOVERRIDES — typically supplied by the addon
 // manager from enabled wrapper addons (dgVoodoo2, ReShade, etc.).
+// extraEnv are additional KEY=VALUE entries — typically Vulkan-layer toggles
+// or per-platform engine flags from addons that don't ship DLL overrides
+// (vkBasalt etc).
 // onOutput receives stdout/stderr lines. onExit is called when the process ends.
-func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, onOutput func(string), onExit func(GameStatus)) error {
+func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, extraEnv map[string]string, onOutput func(string), onExit func(GameStatus)) error {
 	l.mu.Lock()
 	if l.status.Running {
 		l.mu.Unlock()
@@ -75,6 +78,9 @@ func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, onOutp
 	case runtime.GOOS == "windows" || cfg.RuntimeMode == "native":
 		cmd = exec.Command(exePath)
 		env = os.Environ()
+		for k, v := range extraEnv {
+			env = append(env, k+"="+v)
+		}
 
 	case cfg.RuntimeMode == "proton":
 		protonPath := cfg.ProtonPath
@@ -87,6 +93,7 @@ func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, onOutp
 			EnableDXVK:        cfg.EnableDXVK,
 			EnableMangoHud:    cfg.EnableMangoHud,
 			ExtraDLLOverrides: extraDLLOverrides,
+			ExtraEnv:          extraEnv,
 		}
 		env = prefixMgr.BuildGameEnv(protonPath, envOpts)
 
@@ -114,6 +121,9 @@ func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, onOutp
 		)
 		if cfg.PrefixPath != "" {
 			env = append(env, fmt.Sprintf("WINEPREFIX=%s", cfg.PrefixPath))
+		}
+		for k, v := range extraEnv {
+			env = append(env, k+"="+v)
 		}
 
 	default:

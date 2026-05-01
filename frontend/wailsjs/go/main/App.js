@@ -82,6 +82,10 @@ export function GetLocalVersion() {
   return window['go']['main']['App']['GetLocalVersion']();
 }
 
+export function GetMissingExpected() {
+  return window['go']['main']['App']['GetMissingExpected']();
+}
+
 export function GetPlatformInfo() {
   return window['go']['main']['App']['GetPlatformInfo']();
 }
@@ -130,6 +134,10 @@ export function RemoveServer(arg1) {
   return window['go']['main']['App']['RemoveServer'](arg1);
 }
 
+export function ReorderAddons(arg1) {
+  return window['go']['main']['App']['ReorderAddons'](arg1);
+}
+
 export function RunSysConfig() {
   return window['go']['main']['App']['RunSysConfig']();
 }
@@ -146,6 +154,10 @@ export function SetActiveServer(arg1) {
   return window['go']['main']['App']['SetActiveServer'](arg1);
 }
 
+export function SetAddonPriority(arg1, arg2) {
+  return window['go']['main']['App']['SetAddonPriority'](arg1, arg2);
+}
+
 export function SetProtonBuild(arg1, arg2) {
   return window['go']['main']['App']['SetProtonBuild'](arg1, arg2);
 }
@@ -160,18 +172,6 @@ export function StartInstall() {
 
 export function StartUpdate() {
   return window['go']['main']['App']['StartUpdate']();
-}
-
-export function ReorderAddons(arg1) {
-  return window['go']['main']['App']['ReorderAddons'](arg1);
-}
-
-export function SetAddonPriority(arg1, arg2) {
-  return window['go']['main']['App']['SetAddonPriority'](arg1, arg2);
-}
-
-export function GetMissingExpected() {
-  return window['go']['main']['App']['GetMissingExpected']();
 }
 
 export function UninstallAddon(arg1) {

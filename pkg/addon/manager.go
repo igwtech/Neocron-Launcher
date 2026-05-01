@@ -190,10 +190,31 @@ func (m *Manager) InstallFromRepo(repoURL string, onProgress func(DownloadProgre
 		return err
 	}
 
-	// Copy files mapped from the repo itself.
+	// IMPORTANT — fetch entries run BEFORE repo files[]. Both write to the
+	// same cacheDir, so whichever runs LAST wins on path collisions. Putting
+	// repo files[] last lets addons override individual files from a
+	// fetched archive (e.g. ship a tuned version of one .fx shader on top
+	// of the upstream pack). Reverse order would make fetches always win,
+	// which is the wrong default for "addon ships X to override fetched X".
+	for fIdx, entry := range manifest.Fetch {
+		pct := 60.0 + (float64(fIdx)/float64(len(manifest.Fetch)+1))*10.0
+		if !platformMatches(entry.OS) {
+			m.log("Skipping fetch [%d] %s — not for %s", fIdx+1, entry.From, runtimeGOOS())
+			continue
+		}
+		report(DownloadProgress{Status: "installing", Percent: pct, Message: fmt.Sprintf("Fetching %s...", entry.From)})
+		if err := m.stageFetched(entry, cacheDir, func(msg string) {
+			report(DownloadProgress{Status: "installing", Percent: pct, Message: msg})
+		}); err != nil {
+			return fmt.Errorf("fetch %s: %w", entry.From, err)
+		}
+	}
+
+	// Repo files[] copied AFTER fetches — see note above. They form the
+	// authoritative top of the override stack from this addon.
 	totalEntries := len(manifest.Files)
 	for idx, fe := range manifest.Files {
-		pct := 60.0 + (float64(idx)/float64(totalEntries+1))*10.0
+		pct := 70.0 + (float64(idx)/float64(totalEntries+1))*10.0
 		if !platformMatches(fe.OS) {
 			m.log("Skipping file [%d/%d] %s — not for %s", idx+1, totalEntries, fe.Src, runtimeGOOS())
 			continue
@@ -210,23 +231,6 @@ func (m *Manager) InstallFromRepo(repoURL string, onProgress func(DownloadProgre
 		report(DownloadProgress{Status: "installing", Percent: pct, Message: fmt.Sprintf("Caching %s...", fe.Dst)})
 		if err := copyTree(srcPath, cacheDst); err != nil {
 			return fmt.Errorf("cache addon files: %w", err)
-		}
-	}
-
-	// Run any external fetch entries — pulls upstream binaries (dgVoodoo2 etc.)
-	// straight from their canonical URLs into the cache, alongside the repo
-	// files. Lets addons reference binaries without redistributing them.
-	for fIdx, entry := range manifest.Fetch {
-		pct := 70.0 + (float64(fIdx)/float64(len(manifest.Fetch)+1))*10.0
-		if !platformMatches(entry.OS) {
-			m.log("Skipping fetch [%d] %s — not for %s", fIdx+1, entry.From, runtimeGOOS())
-			continue
-		}
-		report(DownloadProgress{Status: "installing", Percent: pct, Message: fmt.Sprintf("Fetching %s...", entry.From)})
-		if err := m.stageFetched(entry, cacheDir, func(msg string) {
-			report(DownloadProgress{Status: "installing", Percent: pct, Message: msg})
-		}); err != nil {
-			return fmt.Errorf("fetch %s: %w", entry.From, err)
 		}
 	}
 

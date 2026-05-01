@@ -48,6 +48,8 @@ export function GetLauncherVersion():Promise<string>;
 
 export function GetLocalVersion():Promise<string>;
 
+export function GetMissingExpected():Promise<Record<string, Array<string>>>;
+
 export function GetPlatformInfo():Promise<main.PlatformInfo>;
 
 export function GetPrefixStatus():Promise<proton.PrefixStatus>;
@@ -72,6 +74,8 @@ export function RemoveProtonBuild(arg1:string):Promise<void>;
 
 export function RemoveServer(arg1:number):Promise<void>;
 
+export function ReorderAddons(arg1:Array<string>):Promise<void>;
+
 export function RunSysConfig():Promise<void>;
 
 export function SaveConfig(arg1:config.Config):Promise<void>;
@@ -80,6 +84,8 @@ export function SelectDirectory():Promise<string>;
 
 export function SetActiveServer(arg1:number):Promise<void>;
 
+export function SetAddonPriority(arg1:string,arg2:number):Promise<void>;
+
 export function SetProtonBuild(arg1:string,arg2:string):Promise<void>;
 
 export function SetupPrefix():Promise<void>;
@@ -87,12 +93,6 @@ export function SetupPrefix():Promise<void>;
 export function StartInstall():Promise<void>;
 
 export function StartUpdate():Promise<void>;
-
-export function ReorderAddons(arg1:Array<string>):Promise<void>;
-
-export function SetAddonPriority(arg1:string,arg2:number):Promise<void>;
-
-export function GetMissingExpected():Promise<{[key: string]: Array<string>}>;
 
 export function UninstallAddon(arg1:string):Promise<void>;
 

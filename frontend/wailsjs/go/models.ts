@@ -1,8 +1,45 @@
 export namespace addon {
 	
+	export class FetchEntry {
+	    from: string;
+	    extract?: string;
+	    files: FileEntry[];
+	    os?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new FetchEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.from = source["from"];
+	        this.extract = source["extract"];
+	        this.files = this.convertValues(source["files"], FileEntry);
+	        this.os = source["os"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class FileEntry {
 	    src: string;
 	    dst: string;
+	    os?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new FileEntry(source);
@@ -12,6 +49,7 @@ export namespace addon {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.src = source["src"];
 	        this.dst = source["dst"];
+	        this.os = source["os"];
 	    }
 	}
 	export class AddonManifest {
@@ -26,11 +64,14 @@ export namespace addon {
 	    conflicts: string[];
 	    requires: string[];
 	    wineDllOverrides?: string[];
-
+	    fetch?: FetchEntry[];
+	    expects?: string[];
+	    envVars?: Record<string, any>;
+	
 	    static createFrom(source: any = {}) {
 	        return new AddonManifest(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
@@ -44,6 +85,9 @@ export namespace addon {
 	        this.conflicts = source["conflicts"];
 	        this.requires = source["requires"];
 	        this.wineDllOverrides = source["wineDllOverrides"];
+	        this.fetch = this.convertValues(source["fetch"], FetchEntry);
+	        this.expects = source["expects"];
+	        this.envVars = source["envVars"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -83,6 +127,7 @@ export namespace addon {
 	    }
 	}
 	
+	
 	export class InstalledAddon {
 	    id: string;
 	    repoUrl: string;
@@ -92,11 +137,11 @@ export namespace addon {
 	    installedAt: any;
 	    manifest: AddonManifest;
 	    priority: number;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new InstalledAddon(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];

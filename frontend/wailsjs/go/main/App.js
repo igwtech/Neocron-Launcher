@@ -74,6 +74,10 @@ export function GetInstalledAddons() {
   return window['go']['main']['App']['GetInstalledAddons']();
 }
 
+export function GetLauncherVersion() {
+  return window['go']['main']['App']['GetLauncherVersion']();
+}
+
 export function GetLocalVersion() {
   return window['go']['main']['App']['GetLocalVersion']();
 }

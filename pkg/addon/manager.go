@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"launcher/pkg/version"
 )
 
 // Manager handles addon discovery, installation, and management.
@@ -39,6 +41,10 @@ func NewManager(installDir string) *Manager {
 	} else {
 		logger = log.New(os.Stderr, "[addon] ", log.LstdFlags)
 	}
+
+	// Banner each session start so users pasting addon.log into bug reports
+	// reveal which launcher build wrote the entries.
+	logger.Printf("=== addon manager start — launcher %s ===", version.String())
 
 	return &Manager{
 		DataDir:    dataDir,

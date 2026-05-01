@@ -96,6 +96,17 @@ header .title {
     text-shadow: 0 0 20px var(--accent-glow);
 }
 
+header .title .launcher-version {
+    font-size: 10px;
+    font-weight: normal;
+    letter-spacing: 1px;
+    margin-left: 8px;
+    color: var(--text-secondary);
+    text-shadow: none;
+    cursor: help;
+    user-select: text;
+}
+
 header .version-info {
     display: flex;
     gap: 20px;

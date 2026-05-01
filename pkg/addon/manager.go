@@ -902,10 +902,10 @@ func validateManifest(m AddonManifest) error {
 			return fmt.Errorf("addon.json: 'fetch.from' must be http(s) URL (got %q)", fe.From)
 		}
 		switch fe.Extract {
-		case "", "zip", "tar.gz", "tgz":
+		case "", "zip", "tar.gz", "tgz", "exe":
 			// supported
 		default:
-			return fmt.Errorf("addon.json: 'fetch.extract' must be 'zip', 'tar.gz', or empty (got %q)", fe.Extract)
+			return fmt.Errorf("addon.json: 'fetch.extract' must be 'zip', 'tar.gz', 'exe', or empty (got %q)", fe.Extract)
 		}
 		if len(fe.Files) == 0 {
 			return fmt.Errorf("addon.json: 'fetch' entries need at least one 'files' mapping")

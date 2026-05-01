@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
@@ -68,6 +69,17 @@ func (m *Manager) stageFetched(entry FetchEntry, cacheDir string, report func(ms
 		if err := untarTo(gr, extractedRoot); err != nil {
 			return fmt.Errorf("untar: %w", err)
 		}
+	case "exe":
+		// Self-extracting / .NET / NSIS / MSI installers — 7z handles them all.
+		// We shell out because the formats vary (ReShade is a .NET assembly
+		// with embedded resources; nothing in the Go stdlib reads it).
+		archivePath := filepath.Join(tmp, "archive.exe")
+		if err := writeBody(resp.Body, archivePath); err != nil {
+			return err
+		}
+		if err := extractWith7z(archivePath, extractedRoot); err != nil {
+			return fmt.Errorf("7z extract: %w", err)
+		}
 	case "":
 		// Raw single-file download — write under extracted/<basename>.
 		base := path.Base(entry.From)
@@ -79,27 +91,91 @@ func (m *Manager) stageFetched(entry FetchEntry, cacheDir string, report func(ms
 			return err
 		}
 	default:
-		return fmt.Errorf("fetch: unsupported extract format %q (want 'zip', 'tar.gz', or '')", entry.Extract)
+		return fmt.Errorf("fetch: unsupported extract format %q (want 'zip', 'tar.gz', 'exe', or '')", entry.Extract)
 	}
 
 	for _, fe := range entry.Files {
-		src := filepath.Join(extractedRoot, filepath.FromSlash(fe.Src))
-		// Path-traversal guard: src must remain inside extractedRoot.
-		if !strings.HasPrefix(filepath.Clean(src), filepath.Clean(extractedRoot)) {
-			m.log("stageFetched: skipping out-of-archive src %q", fe.Src)
-			continue
+		if err := stageFetchedFile(fe, extractedRoot, cacheDir, m.log, report); err != nil {
+			return err
 		}
-		if _, err := os.Stat(src); err != nil {
-			m.log("stageFetched: source %q not found in archive (%v)", fe.Src, err)
+	}
+	return nil
+}
+
+// stageFetchedFile copies one FileEntry from extractedRoot to cacheDir.
+// If src contains a glob character (* ? [), each match is copied to
+// dst/<basename>; otherwise it's a plain tree-copy. Path traversal in src
+// or matches is silently skipped.
+func stageFetchedFile(fe FileEntry, extractedRoot, cacheDir string, logf func(string, ...interface{}), report func(string)) error {
+	cleanRoot := filepath.Clean(extractedRoot)
+
+	if isGlobPattern(fe.Src) {
+		pattern := filepath.Join(extractedRoot, filepath.FromSlash(fe.Src))
+		matches, err := filepath.Glob(pattern)
+		if err != nil {
+			return fmt.Errorf("glob %s: %w", fe.Src, err)
+		}
+		if len(matches) == 0 {
+			logf("stageFetched: glob %q matched nothing", fe.Src)
 			if report != nil {
-				report(fmt.Sprintf("Skipping %s (not in archive)", fe.Src))
+				report(fmt.Sprintf("No matches for %s", fe.Src))
 			}
-			continue
+			return nil
 		}
-		dst := filepath.Join(cacheDir, filepath.FromSlash(fe.Dst))
-		if err := copyTree(src, dst); err != nil {
-			return fmt.Errorf("stage %s -> %s: %w", fe.Src, fe.Dst, err)
+		dstDir := filepath.Join(cacheDir, filepath.FromSlash(fe.Dst))
+		for _, match := range matches {
+			if !insideDir(match, cleanRoot) {
+				logf("stageFetched: skipping out-of-archive match %q", match)
+				continue
+			}
+			dst := filepath.Join(dstDir, filepath.Base(match))
+			if err := copyTree(match, dst); err != nil {
+				return fmt.Errorf("stage %s -> %s: %w", match, dst, err)
+			}
 		}
+		return nil
+	}
+
+	src := filepath.Join(extractedRoot, filepath.FromSlash(fe.Src))
+	if !insideDir(src, cleanRoot) {
+		logf("stageFetched: skipping out-of-archive src %q", fe.Src)
+		return nil
+	}
+	if _, err := os.Stat(src); err != nil {
+		logf("stageFetched: source %q not found in archive (%v)", fe.Src, err)
+		if report != nil {
+			report(fmt.Sprintf("Skipping %s (not in archive)", fe.Src))
+		}
+		return nil
+	}
+	dst := filepath.Join(cacheDir, filepath.FromSlash(fe.Dst))
+	if err := copyTree(src, dst); err != nil {
+		return fmt.Errorf("stage %s -> %s: %w", fe.Src, fe.Dst, err)
+	}
+	return nil
+}
+
+func isGlobPattern(s string) bool {
+	return strings.ContainsAny(s, "*?[")
+}
+
+func insideDir(path, dir string) bool {
+	clean := filepath.Clean(path)
+	return strings.HasPrefix(clean+string(os.PathSeparator), dir+string(os.PathSeparator)) || clean == dir
+}
+
+// extractWith7z shells out to the system 7z binary. Returns a clear error if
+// 7z is missing — graphics addons that fetch self-extracting installers
+// document this dependency in their README.
+func extractWith7z(archivePath, destDir string) error {
+	bin, err := exec.LookPath("7z")
+	if err != nil {
+		return fmt.Errorf("'7z' not found on PATH — install p7zip (Linux), p7zip (macOS Homebrew), or 7-Zip (Windows) and retry")
+	}
+	cmd := exec.Command(bin, "x", "-y", "-o"+destDir, archivePath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("7z exited %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

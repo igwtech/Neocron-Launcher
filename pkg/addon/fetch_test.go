@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -237,6 +238,251 @@ func TestUnzip_pathTraversalIgnored(t *testing.T) {
 	}
 }
 
+func TestStageFetched_globRoutesByExtension(t *testing.T) {
+	// Mirrors the crosire/reshade-shaders nvidia branch layout: shaders
+	// and textures share one ShadersAndTextures/ dir; ReShade expects them
+	// split. One fetch entry, multiple globs routed to different dst dirs.
+	tarBytes := makeTarGz(t, map[string]string{
+		"reshade-shaders-nvidia/ShadersAndTextures/SMAA.fx":      "SMAA-FX",
+		"reshade-shaders-nvidia/ShadersAndTextures/SMAA.fxh":     "SMAA-FXH",
+		"reshade-shaders-nvidia/ShadersAndTextures/Bloom.fx":     "BLOOM-FX",
+		"reshade-shaders-nvidia/ShadersAndTextures/lut.png":      "LUT-PNG",
+		"reshade-shaders-nvidia/ShadersAndTextures/dirt.dds":     "DIRT-DDS",
+		"reshade-shaders-nvidia/ShadersAndTextures/noise.tga":    "NOISE-TGA",
+		"reshade-shaders-nvidia/README.md":                       "README",
+		"reshade-shaders-nvidia/LICENSE":                         "LICENSE",
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(tarBytes)
+	}))
+	defer srv.Close()
+
+	m := newFetchManager(t)
+	cacheDir := filepath.Join(m.DataDir, "cache")
+	os.MkdirAll(cacheDir, 0755)
+
+	entry := FetchEntry{
+		From:    srv.URL + "/shaders.tar.gz",
+		Extract: "tar.gz",
+		Files: []FileEntry{
+			{Src: "reshade-shaders-nvidia/ShadersAndTextures/*.fx", Dst: "reshade-shaders/Shaders"},
+			{Src: "reshade-shaders-nvidia/ShadersAndTextures/*.fxh", Dst: "reshade-shaders/Shaders"},
+			{Src: "reshade-shaders-nvidia/ShadersAndTextures/*.png", Dst: "reshade-shaders/Textures"},
+			{Src: "reshade-shaders-nvidia/ShadersAndTextures/*.dds", Dst: "reshade-shaders/Textures"},
+			{Src: "reshade-shaders-nvidia/ShadersAndTextures/*.tga", Dst: "reshade-shaders/Textures"},
+		},
+	}
+
+	if err := m.stageFetched(entry, cacheDir, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	wantShaders := map[string]string{
+		"reshade-shaders/Shaders/SMAA.fx":   "SMAA-FX",
+		"reshade-shaders/Shaders/SMAA.fxh":  "SMAA-FXH",
+		"reshade-shaders/Shaders/Bloom.fx":  "BLOOM-FX",
+		"reshade-shaders/Textures/lut.png":  "LUT-PNG",
+		"reshade-shaders/Textures/dirt.dds": "DIRT-DDS",
+		"reshade-shaders/Textures/noise.tga": "NOISE-TGA",
+	}
+	for rel, want := range wantShaders {
+		got, err := os.ReadFile(filepath.Join(cacheDir, rel))
+		if err != nil {
+			t.Errorf("%s not staged: %v", rel, err)
+			continue
+		}
+		if string(got) != want {
+			t.Errorf("%s: got %q want %q", rel, got, want)
+		}
+	}
+	// README and LICENSE must NOT have leaked — no glob matches them.
+	for _, leaked := range []string{
+		"reshade-shaders/Shaders/README.md",
+		"reshade-shaders/Textures/README.md",
+		"reshade-shaders/Shaders/LICENSE",
+	} {
+		if _, err := os.Stat(filepath.Join(cacheDir, leaked)); err == nil {
+			t.Errorf("%s should not have been staged", leaked)
+		}
+	}
+}
+
+func TestStageFetched_globNoMatchesIsNotError(t *testing.T) {
+	tarBytes := makeTarGz(t, map[string]string{
+		"root/file.txt": "ok",
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(tarBytes)
+	}))
+	defer srv.Close()
+
+	m := newFetchManager(t)
+	cacheDir := filepath.Join(m.DataDir, "cache")
+	os.MkdirAll(cacheDir, 0755)
+
+	// The glob matches nothing — that's a soft skip, not a hard error.
+	// Otherwise an empty branch (e.g. shader pack with no .tga textures)
+	// would refuse to install.
+	err := m.stageFetched(FetchEntry{
+		From:    srv.URL + "/empty.tar.gz",
+		Extract: "tar.gz",
+		Files: []FileEntry{
+			{Src: "root/*.nonexistent", Dst: "out"},
+		},
+	}, cacheDir, nil)
+	if err != nil {
+		t.Errorf("non-matching glob should be a soft skip, got %v", err)
+	}
+}
+
+func TestStageFetched_exeRequires7z(t *testing.T) {
+	// Skip the test transparently if 7z isn't installed in this CI env —
+	// the production code returns a clear error to the user, but covering
+	// that path requires PATH-mocking we don't bother with here.
+	if _, err := exec.LookPath("7z"); err != nil {
+		t.Skip("7z not in PATH")
+	}
+
+	// Build a real .zip and serve it as if it were a .exe — 7z handles
+	// both formats, so this exercises the same code path the production
+	// ReShade installer fetch would hit.
+	zipBytes := makeZip(t, map[string]string{
+		"ReShade32.dll": "RESHADE-32-PAYLOAD",
+		"ReShade64.dll": "RESHADE-64-PAYLOAD",
+		"License.txt":   "BSD-3-CLAUSE",
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write(zipBytes)
+	}))
+	defer srv.Close()
+
+	m := newFetchManager(t)
+	cacheDir := filepath.Join(m.DataDir, "cache")
+	os.MkdirAll(cacheDir, 0755)
+
+	entry := FetchEntry{
+		From:    srv.URL + "/ReShade_Setup.exe",
+		Extract: "exe",
+		Files: []FileEntry{
+			{Src: "ReShade32.dll", Dst: "dxgi.dll"},
+		},
+	}
+	if err := m.stageFetched(entry, cacheDir, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(filepath.Join(cacheDir, "dxgi.dll"))
+	if err != nil {
+		t.Fatalf("dxgi.dll not staged: %v", err)
+	}
+	if string(got) != "RESHADE-32-PAYLOAD" {
+		t.Errorf("wrong DLL selected: got %q", got)
+	}
+	// 64-bit DLL and license must not leak — only ReShade32 was requested.
+	if _, err := os.Stat(filepath.Join(cacheDir, "ReShade64.dll")); err == nil {
+		t.Errorf("ReShade64.dll should not have been staged")
+	}
+}
+
+// TestStageFetched_liveURLs is the end-to-end smoke test for the graphics
+// pack's three real upstream sources. It hits the live network, so it's
+// gated on RUN_LIVE_FETCH=1 and skipped by default. Run with:
+//
+//	RUN_LIVE_FETCH=1 go test ./pkg/addon/ -run TestStageFetched_liveURLs -v
+//
+// Each fetch entry is asserted independently — when an upstream URL changes
+// or extraction breaks, this is the test that catches it before a release.
+func TestStageFetched_liveURLs(t *testing.T) {
+	if os.Getenv("RUN_LIVE_FETCH") == "" {
+		t.Skip("RUN_LIVE_FETCH not set — skipping live network test")
+	}
+
+	type expect struct {
+		name     string
+		entry    FetchEntry
+		minBytes map[string]int // dst -> minimum byte count to accept
+	}
+
+	cases := []expect{
+		{
+			name: "dgVoodoo2 zip",
+			entry: FetchEntry{
+				From:    "https://github.com/dege-diosg/dgVoodoo2/releases/download/v2.87.1/dgVoodoo2_87_1.zip",
+				Extract: "zip",
+				Files:   []FileEntry{{Src: "MS/x86/D3D8.dll", Dst: "D3D8.dll"}},
+			},
+			minBytes: map[string]int{"D3D8.dll": 200_000},
+		},
+		{
+			name: "ReShade exe (7z)",
+			entry: FetchEntry{
+				From:    "https://reshade.me/downloads/ReShade_Setup_6.7.3_Addon.exe",
+				Extract: "exe",
+				Files:   []FileEntry{{Src: "ReShade32.dll", Dst: "dxgi.dll"}},
+			},
+			minBytes: map[string]int{"dxgi.dll": 1_000_000},
+		},
+		{
+			name: "shader tarball glob",
+			entry: FetchEntry{
+				From:    "https://github.com/crosire/reshade-shaders/archive/refs/heads/nvidia.tar.gz",
+				Extract: "tar.gz",
+				Files: []FileEntry{
+					{Src: "reshade-shaders-nvidia/ShadersAndTextures/*.fx", Dst: "reshade-shaders/Shaders"},
+					{Src: "reshade-shaders-nvidia/ShadersAndTextures/*.fxh", Dst: "reshade-shaders/Shaders"},
+					{Src: "reshade-shaders-nvidia/ShadersAndTextures/*.png", Dst: "reshade-shaders/Textures"},
+				},
+			},
+			minBytes: map[string]int{
+				"reshade-shaders/Shaders/SMAA.fx": 100,
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newFetchManager(t)
+			cacheDir := filepath.Join(m.DataDir, "cache")
+			os.MkdirAll(cacheDir, 0755)
+
+			if err := m.stageFetched(tc.entry, cacheDir, func(msg string) {
+				t.Log(msg)
+			}); err != nil {
+				t.Fatalf("stageFetched: %v", err)
+			}
+
+			for rel, minSize := range tc.minBytes {
+				st, err := os.Stat(filepath.Join(cacheDir, rel))
+				if err != nil {
+					t.Errorf("expected %s in cache: %v", rel, err)
+					continue
+				}
+				if st.Size() < int64(minSize) {
+					t.Errorf("%s: size %d < expected min %d", rel, st.Size(), minSize)
+				}
+			}
+		})
+	}
+}
+
+func TestIsGlobPattern(t *testing.T) {
+	cases := map[string]bool{
+		"":                false,
+		"plain/path.txt":  false,
+		"a/b/c.dll":       false,
+		"*.fx":            true,
+		"shaders/*.fxh":   true,
+		"a?.dll":          true,
+		"a[0-9].dll":      true,
+		"escaped\\*.dll":  true, // we treat any glob char as a glob, even if escaped — addons shouldn't author escaped patterns
+	}
+	for s, want := range cases {
+		if got := isGlobPattern(s); got != want {
+			t.Errorf("isGlobPattern(%q) = %v, want %v", s, got, want)
+		}
+	}
+}
+
 func TestValidateManifest_fetch(t *testing.T) {
 	cases := []struct {
 		name      string
@@ -275,6 +521,13 @@ func TestValidateManifest_fetch(t *testing.T) {
 				Fetch: []FetchEntry{{From: "https://x/y.7z", Extract: "7z", Files: []FileEntry{{Src: "x", Dst: "x"}}}},
 			},
 			wantError: "fetch.extract",
+		},
+		{
+			name: "fetch exe extract is supported",
+			m: AddonManifest{
+				ID: "x", Name: "X", Version: "1",
+				Fetch: []FetchEntry{{From: "https://x/y.exe", Extract: "exe", Files: []FileEntry{{Src: "ReShade32.dll", Dst: "dxgi.dll"}}}},
+			},
 		},
 		{
 			name: "fetch missing files",

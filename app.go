@@ -12,6 +12,7 @@ import (
 	"launcher/pkg/neocronapi"
 	"launcher/pkg/proton"
 	"launcher/pkg/updater"
+	"launcher/pkg/version"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -41,6 +42,10 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
+	// One-line banner so bug reports posted from logs / Discord screenshots
+	// always carry the build identity (release tag + short SHA).
+	fmt.Printf("Neocron Launcher %s — %s/%s\n", version.String(), runtime.GOOS, runtime.GOARCH)
+
 	cfg, err := config.Load()
 	if err != nil {
 		fmt.Println("Warning: could not load config, using defaults:", err)
@@ -68,6 +73,12 @@ func (a *App) GetPlatformInfo() PlatformInfo {
 		OS:   runtime.GOOS,
 		Arch: runtime.GOARCH,
 	}
+}
+
+// GetLauncherVersion returns the launcher build identity for the UI footer
+// and bug reports. See pkg/version for how this is set at build time.
+func (a *App) GetLauncherVersion() string {
+	return version.String()
 }
 
 // --- Config bindings ---

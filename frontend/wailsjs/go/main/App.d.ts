@@ -44,6 +44,8 @@ export function GetGameStatus():Promise<launcher.GameStatus>;
 
 export function GetInstalledAddons():Promise<Array<addon.InstalledAddon>>;
 
+export function GetLauncherVersion():Promise<string>;
+
 export function GetLocalVersion():Promise<string>;
 
 export function GetPlatformInfo():Promise<main.PlatformInfo>;

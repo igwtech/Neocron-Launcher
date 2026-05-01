@@ -6,6 +6,7 @@ import {
     AddServer,
     RemoveServer,
     SetActiveServer,
+    GetLauncherVersion,
     GetLocalVersion,
     GetServerVersion,
     StartUpdate,
@@ -103,8 +104,17 @@ async function init() {
 }
 
 async function loadVersions() {
+    const launcherEl = document.getElementById('launcher-version');
     const localEl = document.getElementById('local-version');
     const serverEl = document.getElementById('server-version');
+    try {
+        const v = await GetLauncherVersion();
+        launcherEl.textContent = v;
+        // Logged so it shows up in browser devtools / Wails dev console too.
+        console.log(`Neocron Launcher ${v}`);
+    } catch {
+        launcherEl.textContent = 'N/A';
+    }
     try { localEl.textContent = await GetLocalVersion(); } catch { localEl.textContent = 'N/A'; }
     try { serverEl.textContent = await GetServerVersion(); } catch { serverEl.textContent = 'N/A'; }
 }

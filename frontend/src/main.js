@@ -536,18 +536,25 @@ function openSettingsModal() {
         await InstallAddon(url);
     };
     document.getElementById('btn-addon-check-updates').onclick = async () => {
+        const textEl = document.getElementById('addon-progress-text');
+        const widget = document.getElementById('addon-progress');
         try {
             const updates = await CheckAddonUpdates();
             if (!updates || updates.length === 0) {
-                document.getElementById('addon-progress-text').textContent = 'All addons up to date';
-                document.getElementById('addon-progress').classList.remove('hidden');
+                textEl.textContent = 'All addons up to date';
             } else {
-                document.getElementById('addon-progress-text').textContent = `${updates.length} update(s) available`;
-                document.getElementById('addon-progress').classList.remove('hidden');
+                const esc = s => String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+                const rows = updates.map(u =>
+                    `<li><strong>${esc(u.addonId)}</strong>: ${esc(u.currentVersion)} → ${esc(u.latestVersion)}</li>`
+                ).join('');
+                textEl.innerHTML =
+                    `${updates.length} update(s) available:` +
+                    `<ul style="margin:4px 0 0 18px;padding:0;list-style:disc;">${rows}</ul>`;
             }
+            widget.classList.remove('hidden');
         } catch (e) {
-            document.getElementById('addon-progress-text').textContent = 'Error: ' + e;
-            document.getElementById('addon-progress').classList.remove('hidden');
+            textEl.textContent = 'Error: ' + e;
+            widget.classList.remove('hidden');
         }
     };
     document.getElementById('btn-sysconfig').onclick = async () => {

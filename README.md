@@ -1,6 +1,6 @@
 # Neocron Launcher
 
-Cross-platform game launcher and installer for [Neocron 2](https://en.wikipedia.org/wiki/Neocron), built with Go and [Wails](https://wails.io). Designed for use with community server emulators since the official servers are no longer maintained.
+Cross-platform game launcher and installer for [Neocron 2](https://en.wikipedia.org/wiki/Neocron), built with Go and [Wails](https://wails.io). Designed for use with Neocron2 official Community servers.
 
 ## Why
 I fell in love with Neocron during the open beta in the early 2000s and have followed the project ever since. As the game transitioned to community-run servers, I found myself in a cycle of "returning to the city" every few months, only to be met with the same technical hurdles:

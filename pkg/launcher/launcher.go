@@ -228,9 +228,39 @@ func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, extraE
 	l.status = GameStatus{Running: true, PID: cmd.Process.Pid}
 	l.mu.Unlock()
 
+	// Persist game stdout/stderr to a file so Wine +debugstr
+	// output and crash backtraces survive past the ephemeral UI
+	// log-panel (truncated each launch). Best-effort: a logging
+	// failure must not break the launch.
+	var (
+		logMu  sync.Mutex
+		logF   *os.File
+		logErr error
+	)
+	gameLogPath := filepath.Join(cfg.InstallDir, "logs",
+		"launcher-game.log")
+	if mkErr := os.MkdirAll(filepath.Dir(gameLogPath), 0o755); mkErr == nil {
+		logF, logErr = os.Create(gameLogPath)
+	} else {
+		logErr = mkErr
+	}
+	if onOutput != nil {
+		if logErr == nil {
+			onOutput("[launcher] game output → " + gameLogPath)
+		} else {
+			onOutput("[launcher] Warning: game-log file disabled: " +
+				logErr.Error())
+		}
+	}
+
 	emit := func(line string) {
 		if onOutput != nil {
 			onOutput(line)
+		}
+		if logF != nil {
+			logMu.Lock()
+			_, _ = logF.WriteString(line + "\n")
+			logMu.Unlock()
 		}
 	}
 
@@ -251,6 +281,12 @@ func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, extraE
 	// Wait for exit in background
 	go func() {
 		err := cmd.Wait()
+
+		if logF != nil {
+			logMu.Lock()
+			_ = logF.Close()
+			logMu.Unlock()
+		}
 
 		l.mu.Lock()
 		exitCode := 0

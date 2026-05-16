@@ -144,6 +144,68 @@ func (l *Launcher) Launch(cfg *config.Config, extraDLLOverrides []string, extraE
 		}
 	}
 
+	// Wrap with gamescope outermost if HDR ITM is enabled. Provides
+	// algorithmic SDR→HDR upmix for the entire chain (gamemoderun
+	// + Proton + game). Linux only.
+	if cfg.EnableGamescopeHDR && runtime.GOOS == "linux" {
+		if gsPath, err := exec.LookPath("gamescope"); err == nil {
+			sdrNits := cfg.GamescopeHDRSDRNits
+			if sdrNits <= 0 {
+				sdrNits = 100
+			}
+			targetNits := cfg.GamescopeHDRTargetNits
+			if targetNits <= 0 {
+				targetNits = 600
+			}
+			gsArgs := []string{
+				gsPath,
+				"--hdr-enabled",
+				"--hdr-itm-enable",
+				fmt.Sprintf("--hdr-itm-sdr-nits=%d", sdrNits),
+				fmt.Sprintf("--hdr-itm-target-nits=%d", targetNits),
+				"--",
+			}
+			cmd.Args = append(gsArgs, cmd.Args...)
+			cmd.Path = gsPath
+			if onOutput != nil {
+				onOutput(fmt.Sprintf("[launcher] Gamescope HDR ITM: SDR=%d nits → target=%d nits", sdrNits, targetNits))
+			}
+		} else if onOutput != nil {
+			onOutput("[launcher] Warning: EnableGamescopeHDR requested but `gamescope` binary not found in PATH; HDR disabled")
+		}
+	}
+
+	// Debug / diagnostics env overrides — applied uniformly for
+	// every runtime mode (native/proton/wine) at the single env
+	// injection point. cfg.WineDebug replaces the default WINEDEBUG
+	// channel (e.g. "+debugstr,+seh" to capture OutputDebugStringA
+	// + crash backtraces for client RE); cfg.ExtraEnv appends raw
+	// KEY=VALUE entries (later wins). Off by default.
+	if strings.TrimSpace(cfg.WineDebug) != "" {
+		filtered := env[:0:0]
+		for _, e := range env {
+			if !strings.HasPrefix(e, "WINEDEBUG=") {
+				filtered = append(filtered, e)
+			}
+		}
+		env = append(filtered,
+			"WINEDEBUG="+strings.TrimSpace(cfg.WineDebug))
+		if onOutput != nil {
+			onOutput("[launcher] WINEDEBUG=" +
+				strings.TrimSpace(cfg.WineDebug))
+		}
+	}
+	for _, kv := range cfg.ExtraEnv {
+		kv = strings.TrimSpace(kv)
+		if kv == "" || !strings.Contains(kv, "=") {
+			continue
+		}
+		env = append(env, kv)
+		if onOutput != nil {
+			onOutput("[launcher] extra env: " + kv)
+		}
+	}
+
 	cmd.Dir = cfg.InstallDir
 	cmd.Env = env
 

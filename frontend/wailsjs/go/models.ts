@@ -207,9 +207,14 @@ export namespace config {
 	    enableDxvk: boolean;
 	    enableGameMode: boolean;
 	    enableMangoHud: boolean;
+	    enableGamescopeHdr: boolean;
+	    gamescopeHdrSdrNits: number;
+	    gamescopeHdrTargetNits: number;
 	    launchArgs: string;
+	    wineDebug: string;
+	    extraEnv: string[];
 	    apiBaseUrl: string;
-	
+
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }
@@ -228,7 +233,12 @@ export namespace config {
 	        this.enableDxvk = source["enableDxvk"];
 	        this.enableGameMode = source["enableGameMode"];
 	        this.enableMangoHud = source["enableMangoHud"];
+	        this.enableGamescopeHdr = source["enableGamescopeHdr"];
+	        this.gamescopeHdrSdrNits = source["gamescopeHdrSdrNits"];
+	        this.gamescopeHdrTargetNits = source["gamescopeHdrTargetNits"];
 	        this.launchArgs = source["launchArgs"];
+	        this.wineDebug = source["wineDebug"];
+	        this.extraEnv = source["extraEnv"];
 	        this.apiBaseUrl = source["apiBaseUrl"];
 	    }
 	

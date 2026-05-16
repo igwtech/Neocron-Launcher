@@ -100,7 +100,12 @@ func (a *App) SaveConfig(cfg config.Config) error {
 	a.cfg.EnableDXVK = cfg.EnableDXVK
 	a.cfg.EnableGameMode = cfg.EnableGameMode
 	a.cfg.EnableMangoHud = cfg.EnableMangoHud
+	a.cfg.EnableGamescopeHDR = cfg.EnableGamescopeHDR
+	a.cfg.GamescopeHDRSDRNits = cfg.GamescopeHDRSDRNits
+	a.cfg.GamescopeHDRTargetNits = cfg.GamescopeHDRTargetNits
 	a.cfg.LaunchArgs = cfg.LaunchArgs
+	a.cfg.WineDebug = cfg.WineDebug
+	a.cfg.ExtraEnv = cfg.ExtraEnv
 	a.cfg.APIBaseURL = cfg.APIBaseURL
 
 	a.updater = updater.NewUpdater(a.cfg.CDNBaseURL, a.cfg.InstallDir)

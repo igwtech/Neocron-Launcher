@@ -496,14 +496,21 @@ function openSettingsModal() {
     document.getElementById('setting-cdn-url').value = config.cdnBaseUrl || '';
     document.getElementById('setting-game-exe').value = config.gameExe || '';
     document.getElementById('setting-launch-args').value = config.launchArgs || '';
+    document.getElementById('setting-wine-debug').value = config.wineDebug || '';
+    document.getElementById('setting-extra-env').value = (config.extraEnv || []).join('\n');
     document.getElementById('setting-api-url').value = config.apiBaseUrl || '';
     document.getElementById('setting-runtime-mode').value = config.runtimeMode || 'proton';
     document.getElementById('setting-dxvk').checked = config.enableDxvk !== false;
     document.getElementById('setting-gamemode').checked = !!config.enableGameMode;
     document.getElementById('setting-mangohud').checked = !!config.enableMangoHud;
+    document.getElementById('setting-gamescope-hdr').checked = !!config.enableGamescopeHdr;
+    document.getElementById('setting-gamescope-hdr-sdr-nits').value = config.gamescopeHdrSdrNits || 100;
+    document.getElementById('setting-gamescope-hdr-target-nits').value = config.gamescopeHdrTargetNits || 600;
 
     if (platform.os === 'windows') {
         document.getElementById('gamemode-row').classList.add('hidden');
+        document.getElementById('gamescope-hdr-row').classList.add('hidden');
+        document.getElementById('gamescope-hdr-tuning').classList.add('hidden');
     }
 
     updateProtonSettingsVisibility();
@@ -566,11 +573,17 @@ function openSettingsModal() {
         config.cdnBaseUrl = document.getElementById('setting-cdn-url').value;
         config.gameExe = document.getElementById('setting-game-exe').value;
         config.launchArgs = document.getElementById('setting-launch-args').value;
+        config.wineDebug = document.getElementById('setting-wine-debug').value.trim();
+        config.extraEnv = document.getElementById('setting-extra-env').value
+            .split('\n').map(s => s.trim()).filter(s => s.length > 0);
         config.apiBaseUrl = document.getElementById('setting-api-url').value;
         config.runtimeMode = document.getElementById('setting-runtime-mode').value;
         config.enableDxvk = document.getElementById('setting-dxvk').checked;
         config.enableGameMode = document.getElementById('setting-gamemode').checked;
         config.enableMangoHud = document.getElementById('setting-mangohud').checked;
+        config.enableGamescopeHdr = document.getElementById('setting-gamescope-hdr').checked;
+        config.gamescopeHdrSdrNits = parseInt(document.getElementById('setting-gamescope-hdr-sdr-nits').value, 10) || 100;
+        config.gamescopeHdrTargetNits = parseInt(document.getElementById('setting-gamescope-hdr-target-nits').value, 10) || 600;
 
         const buildSelect = document.getElementById('setting-proton-build');
         const selectedOpt = buildSelect.options[buildSelect.selectedIndex];

@@ -34,8 +34,30 @@ type Config struct {
 	EnableGameMode bool `json:"enableGameMode"`
 	EnableMangoHud bool `json:"enableMangoHud"`
 
+	// Gamescope HDR — Linux only. When enabled, the launch command is
+	// wrapped with `gamescope --hdr-enabled --hdr-itm-enable
+	// --hdr-itm-sdr-nits=N --hdr-itm-target-nits=M -- ...` to give
+	// algorithmic AutoHDR (inverse tone mapping) for SDR titles like
+	// Neocron 2 on HDR-capable displays. Requires Gamescope 3.14+
+	// and a compositor that supports HDR scanout (KDE Plasma 6,
+	// Hyprland, or running gamescope nested under any session).
+	EnableGamescopeHDR     bool `json:"enableGamescopeHdr"`
+	GamescopeHDRSDRNits    int  `json:"gamescopeHdrSdrNits"`    // perceived SDR brightness, default 100
+	GamescopeHDRTargetNits int  `json:"gamescopeHdrTargetNits"` // target HDR peak, default 600
+
 	// Extra launch arguments
 	LaunchArgs string `json:"launchArgs"`
+
+	// Debug / diagnostics. WineDebug, when non-empty, overrides the
+	// default WINEDEBUG channel string (e.g. "+debugstr,+seh" to
+	// surface OutputDebugStringA + exception backtraces, or
+	// "warn+all"). ExtraEnv is a list of raw "KEY=VALUE" entries
+	// appended to the launch environment in every runtime mode
+	// (native/proton/wine) — for ad-hoc Wine/Proton tuning and RE
+	// capture (WINEDEBUG, WINE_RT, PROTON_LOG, DXVK_HUD, …). Both
+	// are off by default; a later entry wins over an earlier one.
+	WineDebug string   `json:"wineDebug"`
+	ExtraEnv  []string `json:"extraEnv"`
 
 	// API settings
 	APIBaseURL string `json:"apiBaseUrl"` // Neocron management API (SOAP)
@@ -64,12 +86,15 @@ func DefaultConfig() *Config {
 				Port:        7000,
 			},
 		},
-		ActiveServer:   0,
-		RuntimeMode:    runtimeMode,
-		EnableDXVK:     true,
-		EnableGameMode: runtime.GOOS == "linux",
-		EnableMangoHud: false,
-		APIBaseURL:     "http://api.neocron-game.com:8100",
+		ActiveServer:           0,
+		RuntimeMode:            runtimeMode,
+		EnableDXVK:             true,
+		EnableGameMode:         runtime.GOOS == "linux",
+		EnableMangoHud:         false,
+		EnableGamescopeHDR:     false,
+		GamescopeHDRSDRNits:    100,
+		GamescopeHDRTargetNits: 600,
+		APIBaseURL:             "http://api.neocron-game.com:8100",
 	}
 }
 

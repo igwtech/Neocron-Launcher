@@ -214,7 +214,7 @@ export namespace config {
 	    wineDebug: string;
 	    extraEnv: string[];
 	    apiBaseUrl: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
 	    }

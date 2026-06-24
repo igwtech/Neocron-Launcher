@@ -48,6 +48,7 @@ I built this launcher to solve these problems once and for all. It provides a si
 - [Wine/Proton Setup](docs/manual/wine-setup.md)
 - [Server Setup](docs/manual/server-setup.md)
 - [Troubleshooting](docs/manual/troubleshooting.md)
+- [Addon Authoring](docs/manual/addon-authoring.md) — full `addon.json` schema reference
 
 ## Building
 

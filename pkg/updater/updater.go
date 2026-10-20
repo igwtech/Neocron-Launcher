@@ -15,6 +15,8 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -161,7 +163,7 @@ func (u *Updater) CheckForUpdate() UpdateCheckResult {
 	}
 	result.ServerVersion = serverVer
 
-	result.NeedsUpdate = versionToNum(serverVer) > versionToNum(localVer)
+	result.NeedsUpdate = compareVersions(serverVer, localVer) > 0
 	return result
 }
 
@@ -604,18 +606,42 @@ func httpGetWithRetry(url string, retries int) (*http.Response, error) {
 	return nil, lastErr
 }
 
-func versionToNum(version string) int {
-	parts := strings.Split(version, ".")
-	acc := 0
-	for i, p := range parts {
-		val := 0
-		fmt.Sscanf(p, "%d", &val)
-		exp := len(parts) - i
-		mul := 1
-		for j := 0; j < exp; j++ {
-			mul *= 100
+// versionRe matches the trailing dotted number of a version string, so a
+// product prefix is ignored: "NeocronEvolution-2.5.897" -> "2.5.897".
+var versionRe = regexp.MustCompile(`(\d+(?:\.\d+)*)\s*$`)
+
+// compareVersions compares two version strings component by component and
+// returns -1, 0 or 1. Missing components count as 0; a string without a
+// trailing number compares as 0.
+func compareVersions(a, b string) int {
+	pa, pb := versionParts(a), versionParts(b)
+	for i := 0; i < len(pa) || i < len(pb); i++ {
+		var x, y int
+		if i < len(pa) {
+			x = pa[i]
 		}
-		acc += mul * val
+		if i < len(pb) {
+			y = pb[i]
+		}
+		if x != y {
+			if x < y {
+				return -1
+			}
+			return 1
+		}
 	}
-	return acc
+	return 0
+}
+
+func versionParts(version string) []int {
+	m := versionRe.FindStringSubmatch(version)
+	if m == nil {
+		return nil
+	}
+	var parts []int
+	for _, p := range strings.Split(m[1], ".") {
+		n, _ := strconv.Atoi(p)
+		parts = append(parts, n)
+	}
+	return parts
 }

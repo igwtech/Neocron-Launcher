@@ -181,8 +181,17 @@ func (u *Updater) GetServerVersion() (string, error) {
 	return strings.TrimSpace(string(body)), nil
 }
 
-// GetLocalVersion reads the local version from the pak__version._ file.
+// installedVersionFile records the CDN _version._ of the last complete update.
+// The CDN does not bump pak__version._ with releases (it still reads 2.5.110 at
+// NeocronEvolution-2.5.897), so that file cannot tell whether an update is due.
+const installedVersionFile = "_version._"
+
+// GetLocalVersion returns the CDN version recorded by the last complete update,
+// else the version in the pak__version._ file.
 func (u *Updater) GetLocalVersion() (string, error) {
+	if data, err := os.ReadFile(filepath.Join(u.InstallDir, installedVersionFile)); err == nil {
+		return strings.TrimSpace(string(data)), nil
+	}
 	versionFile := filepath.Join(u.InstallDir, "pak__version._")
 	data, err := os.ReadFile(versionFile)
 	if err != nil {
@@ -220,6 +229,13 @@ func (u *Updater) doUpdate(statusLabel string, forceAll bool, onProgress func(Pr
 	}
 
 	report(Progress{Status: "checking", CurrentName: "Fetching file list..."})
+	// Recorded once every file matches, so the next check knows this version is installed.
+	serverVer, verErr := u.GetServerVersion()
+	recordVersion := func() {
+		if verErr == nil {
+			os.WriteFile(filepath.Join(u.InstallDir, installedVersionFile), []byte(serverVer+"\n"), 0644)
+		}
+	}
 
 	// Create install dir
 	if err := os.MkdirAll(u.InstallDir, 0755); err != nil {
@@ -300,6 +316,7 @@ func (u *Updater) doUpdate(statusLabel string, forceAll bool, onProgress func(Pr
 
 	if len(toDownload) == 0 {
 		u.clearState()
+		recordVersion()
 		report(Progress{Status: "done", TotalFiles: 0, Percent: 100})
 		return nil
 	}
@@ -400,6 +417,7 @@ func (u *Updater) doUpdate(statusLabel string, forceAll bool, onProgress func(Pr
 	}
 
 	u.clearState()
+	recordVersion()
 	report(Progress{Status: "done", TotalFiles: totalFiles, Percent: 100, SkippedFiles: int(skippedCount)})
 	return nil
 }
